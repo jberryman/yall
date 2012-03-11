@@ -74,7 +74,22 @@ instance (Monad ms, Monad mg)=> Braided (Lens ms mg) (,) where
 
 instance (Monad ms, Monad mg)=> Symmetric (Lens ms mg) (,)
     
-{- 
+{- PreCartesian:
+ - TODO:   - inspect rules and laws
+ -         - decide on how I feel about Lenses in diag/&&&
+
+ {- RULES
+"fst . diag"      fst . diag = id
+"snd . diag"    snd . diag = id
+"fst . f &&& g" forall f g. fst . (f &&& g) = f
+"snd . f &&& g" forall f g. snd . (f &&& g) = g
+ -}
+ 
+-- TODO: what about instead of (,) here we use something named something
+-- explicity like "Sequence", or at least use a type synonym if possible:
+-- then we get functions like 
+--     put :: Lens a (Sequence b c) -> Sequence b c -> a -> m a
+--
 instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
     type Cart.Product (Lens ms mg) = (,)
   --fst :: Lens (a,b) a
@@ -84,9 +99,13 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
     snd = Lens $ \(a,b)-> return (\b'-> return (a,b') , b)
 
     -- The following two lenses are not traditionally "well-behaved" w/r/t the
-    -- so-called "Lens Laws", violating "put-get". 
+    -- so-called "Lens Laws", violating "put-get". However the Lenses here
+    -- are in essence a composition of a put-put and get-get. This seems 
+    -- perfectly reasonable to me: we allow lens /sequencing/ in addition to
+    -- the lens /chaining/ offered by Category.
+
   --(&&&) :: Lens a b -> Lens a c -> Lens a (b,c)
-  --f &&& g = bimap f g . diag -- DEFAULT
+    --f &&& g = bimap f g . diag -- DEFAULT
     (Lens f) &&& (Lens g) = Lens $ \a-> do
             (bMa,b) <- f a
             (cMa,c) <- g a
@@ -95,16 +114,32 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
             return (setbc, (b, c))
 
   --diag :: Lens a (a,a)
-  --diag = id &&& id --DEFAULT
-  --diag = Lens $ \a -> return (\(_,a')-> return a', (a,a))
+    --diag = id &&& id --DEFAULT
+    --diag = Lens $ \a -> return (\(_,a')-> return a', (a,a))
 
 
+{- RULES
+"codiag . inl"  codiag . inl = id
+"codiag . inr"    codiag . inr = id
+"(f ||| g) . inl" forall f g. (f ||| g) . inl = f
+"(f ||| g) . inr" forall f g. (f ||| g) . inr = g
+ -}
+ 
+-- This instance is quite sane:
 instance PreCoCartesian Lens where
     type Sum Lens = Either
-    inl :: Lens a (Either a b)
-    inr :: Lens b (Either a b)
-    codiag :: Lens (Either a a) a
-    (|||) :: Lens a c -> Lens b c -> Lens (Either a b) c
+  --inl :: Lens a (Either a b)
+    inl = Lens $ \a-> return (either id (const a), Left a)
+  --inr :: Lens b (Either a b)
+    inr = Lens $ \b-> return (either (const b) id, Right b)
+  --codiag :: Lens (Either a a) a
+    --codiag = id ||| id -- DEFAULT
+    --codiag = Lens $ either (l Left) (l Right) where
+    --    l lr a = return (return . lr, a)
+  --(|||) :: Lens a c -> Lens b c -> Lens (Either a b) c
+    --f ||| g = codiag . bimap f g  -- DEFAULT
+    (Lens f) ||| (Lens g) = Lens $ either (mkl Left f) (mkl Right g)
+        where mkl c l = bimap (liftM c .) c . l
 
 -- --------------------
 
@@ -141,11 +176,18 @@ instance Distributive Lens where
 
 
 -- --------------------
--- DEPENDS ON MONOIDAL, PLUS VERY UNLIKELY:
+-- DEPENDS ON MONOIDAL, IS Exp LENS? HMMMM...
+-- LENS IS VERY UNLIKELY TO BE A CCC AFAICT:
 instance CCC Lens where
     type Exp Lens = ??
-    apply :: Lens (?? a b, a) b
-    curry :: Lens (a,b) c -> Lens a (?? b c)
+    apply :: Lens (?? a b, a) b  -- implies at least: given a 'b', produce an 'a'
+    curry :: Lens (a,b) c -> Lens a (?? b c) -- implies: given a (Lens (a,b) c) and a (Lens b c), produce an 'a'
+    curry (Lens f) = 
+        Lens $ \a ->
+            \lbc-> 
+            Lens $ \b-> do 
+                (cMab,c) <- f (a,b)
+                return(\c'-> liftM snd $ cMab c' , c)  -- ...erm. Djinn might be helpful here.
     uncurry :: ...
 
 
