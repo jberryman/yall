@@ -10,6 +10,8 @@ import Control.Categorical.Bifunctor
 import Control.Category.Associative
 import Control.Category.Braided
 --import qualified Control.Category.Cartesian as Cart
+import Control.Category.Monoidal
+import Control.Category.Distributive
 
 import Control.Monad
 import Control.Monad.Trans.Class
@@ -48,9 +50,18 @@ instance (Monad ms, Monad mg)=> Bifunctor (,) (Lens ms mg) (Lens ms mg) (Lens ms
             let setCont (b',d') = liftM2 (,) (bMa b') (dMc d')
             return (setCont, (b,d))
 
+{-
+-- This has complications on the 'put' side, where a constructor mismatch
+-- returns the original structure unchanged:
+--    put l (Left 1) (Right 'a') -- ???
+-- this, once again, violates put-get.
+instance (Monad ms, Monad mg)=> Bifunctor Either (Lens ms mg) (Lens ms mg) (Lens ms mg) where
+    --bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
+-}
+
+
 {-  
- -  What is this for? 
- -  and why isn't (->) an instance?
+ -  What is this for, and why isn't (->) an instance?
  -  It is mentioned in the lib that (->) lacks an /initial/ object, but I
  -  would guess the missing HasTerminalObject is an oversight
  -
@@ -73,15 +84,38 @@ instance (Monad ms, Monad mg)=> Braided (Lens ms mg) (,) where
     braid = Lens $ \(a,b) -> return (\(b',a')-> return (a',b') , (b,a))
 
 instance (Monad ms, Monad mg)=> Symmetric (Lens ms mg) (,)
+
+-- (CO)MONOIDAL ----------------------------------------
+
+type instance Id (Lens ms mg) (,) = ()
+
+-- THIS ABSTRACTS THE dropl/r FUNCTIONS FROM GArrow:
+instance (Monad ms, Monad mg)=> Monoidal (Lens ms mg) (,) where  
+  --idl :: Lens ((), a)  a
+    idl = Lens $ \((),a)-> return (\a'-> return ((),a'), a)
+    idr = Lens $ \(a,())-> return (\a'-> return (a',()), a)
+
+instance (Monad ms, Monad mg)=> Comonoidal (Lens ms mg) (,) where
+  --coidl :: Lens a ((),a)
+    coidl = Lens $ \a-> return (\((),a')-> return a', ((),a))
+    coidr = Lens $ \a-> return (\(a',())-> return a', (a,()))
+
+-- ALSO CONSIDER A Monoid INSTANCE FOR Lens
+-- ALSO CONSIDER A Bifunctor instance encapsulating:
+--     iso :: (a -> b) -> (b -> a) -> Lens a b
+--
+-- what about this interesting function?
+--     unIso :: Lens a b -> (a -> b, b -> a -> a)
+
     
 {- PreCartesian:
  - TODO:   - inspect rules and laws
- -         - decide on how I feel about Lenses in diag/&&&
+ -         - flush out notion of "sequencing" in PreCartesian
 
  {- RULES
-"fst . diag"      fst . diag = id
-"snd . diag"    snd . diag = id
-"fst . f &&& g" forall f g. fst . (f &&& g) = f
+"fst . diag"      fst . diag = id  CHECK
+"snd . diag"    snd . diag = id  CHECK
+"fst . f &&& g" forall f g. fst . (f &&& g) = f  
 "snd . f &&& g" forall f g. snd . (f &&& g) = g
  -}
  
@@ -89,7 +123,12 @@ instance (Monad ms, Monad mg)=> Symmetric (Lens ms mg) (,)
 -- explicity like "Sequence", or at least use a type synonym if possible:
 -- then we get functions like 
 --     put :: Lens a (Sequence b c) -> Sequence b c -> a -> m a
+-- perhaps we can have a nice type operator like
+--     (:>>)
+-- Can we justify the behavior of (&&&)? 
 --
+-- NOTE: well-behaved methods here are: fst/snd
+
 instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
     type Cart.Product (Lens ms mg) = (,)
   --fst :: Lens (a,b) a
@@ -103,20 +142,42 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
     -- are in essence a composition of a put-put and get-get. This seems 
     -- perfectly reasonable to me: we allow lens /sequencing/ in addition to
     -- the lens /chaining/ offered by Category.
+    --
+    -- Actually: (&&&) doesn't behave as we would like. Maybe we have to
+    -- /reverse/ the order on put? would that allow the kind of chaining we're
+    -- looking for?
 
   --(&&&) :: Lens a b -> Lens a c -> Lens a (b,c)
-    --f &&& g = bimap f g . diag -- DEFAULT
+    --f &&& g = bimap f g . diag -- DEFAULT (EQUIVALENT? CHECK)
     (Lens f) &&& (Lens g) = Lens $ \a-> do
             (bMa,b) <- f a
             (cMa,c) <- g a
             -- run set on b', then set on c', sequencing effects
             let setbc (b',c') = bMa b' >> cMa c'
             return (setbc, (b, c))
+    -- OR... this violates 3rd/4th laws above. Still it's unfortunate we can't
+    -- seem to get two sequenced puts in a row with the current lens formulation.
+    (Lens f) &&& (Lens g) = Lens $ \a-> do
+            (bMa,b) <- f a
+            (cMa,c) <- g a  -- should the gets be chained in a similar way?
+            let setbc (b',c') = bMa b' >>= g >>= \(cMa',_)-> cMa c'  -- i.e. set b, open, set c
+            return (setbc, (b,c))
+    -- OR... 
+    (Lens f) &&& (Lens g) = Lens $ \a-> do 
+            (bMa,b) <- f a
+            (\(b',c') -> 
 
   --diag :: Lens a (a,a)
     --diag = id &&& id --DEFAULT
     --diag = Lens $ \a -> return (\(_,a')-> return a', (a,a))
 
+-- --------------------
+
+-- Here `inl` and `inr` definitely would violate put-get. 
+--     e.g. put inl (Right foo)
+-- Also we need an instance Bifunctor for Either as well
+--     bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
+-- is that possible?
 
 {- RULES
 "codiag . inl"  codiag . inl = id
@@ -124,8 +185,9 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
 "(f ||| g) . inl" forall f g. (f ||| g) . inl = f
 "(f ||| g) . inr" forall f g. (f ||| g) . inr = g
  -}
+
+-- NOTE: well-behaved methods here are: codiag/(|||)
  
--- This instance is quite sane:
 instance PreCoCartesian Lens where
     type Sum Lens = Either
   --inl :: Lens a (Either a b)
@@ -134,45 +196,12 @@ instance PreCoCartesian Lens where
     inr = Lens $ \b-> return (either (const b) id, Right b)
   --codiag :: Lens (Either a a) a
     --codiag = id ||| id -- DEFAULT
-    --codiag = Lens $ either (l Left) (l Right) where
-    --    l lr a = return (return . lr, a)
+    codiag = Lens $ either (l Left) (l Right) where
+        l lr a = return (return . lr, a)
   --(|||) :: Lens a c -> Lens b c -> Lens (Either a b) c
     --f ||| g = codiag . bimap f g  -- DEFAULT
-    (Lens f) ||| (Lens g) = Lens $ either (mkl Left f) (mkl Right g)
-        where mkl c l = bimap (liftM c .) c . l
-
--- --------------------
-
--- PROMISING:
-
-{- THESE SHOULD HOLD:
- -  first idr = second idl . associate 
- - second idl = first idr . associate
- -}
-type instance Id Lens (,) = ()
-
--- THIS ABSTRACTS THE dropl/r FUNCTIONS FROM GArrow:
-instance Monoidal Lens (,) where  
-    idl :: Lens ((), a)  a
-    idr :: ...
-
-{- THESE LAWS SHOULD HOLD:
- idr . coidr = id 
- idl . coidl = id 
- coidl . idl = id 
- coidr . idr = id
- -}
-instance Comonoidal Lens (,) where
-    coidl :: Lens a ((),a)
-    coidr :: ...
-
--- ALSO CONSIDER A Monoid INSTANCE FOR Lens
-
--- --------------------
-
--- THIS ACTUALLY LOOKS PROMISING TOO:
-instance Distributive Lens where
-    distribute :: Lens (a, Either b c) (Either (a,b) (a,c))
+    --(Lens f) ||| (Lens g) = Lens $ either (mkl Left f) (mkl Right g)
+    --    where mkl c l = bimap (liftM c .) c . l
 
 
 -- --------------------
@@ -189,9 +218,28 @@ instance CCC Lens where
                 (cMab,c) <- f (a,b)
                 return(\c'-> liftM snd $ cMab c' , c)  -- ...erm. Djinn might be helpful here.
     uncurry :: ...
+-- --------------------
 
+{- RULES
+"factor . distribute" factor . distribute = id
+"distribute . factor" distribute . factor = id
+
+  where...
+    factor :: Lens (Either (a,b) (a,c)) (a, Either b c)
+    factor = second inl ||| second inr
+
+  -}
+
+-- sub-class of PreCartesian
+instance (Monad ms, Monad mg)=> Distributive (Lens ms mg) where
+  --distribute :: Lens (a, Either b c) (Either (a,b) (a,c))
+    distribute = Lens $ \(a,ebc)-> 
+        return (return . factor, bimap ((,) a) ((,) a) ebc)
 
 -}
+
+
+
 
 -- -------------------
 -- TODO: DECIDE ABOUT NAMING HERE AND CONSIDER MOVING TO SEPARATE MODULES:
