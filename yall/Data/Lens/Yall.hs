@@ -121,222 +121,41 @@ sndL = Lens $ \(a,b)-> return (\b'-> return (a,b') , b)
 
 -- combinators from PreCoCartesian that preserve strict well-behavedness
 
--- TODO: change name here:
 -- | 
--- > codiag = id ||| id
-codiag :: (Monad mg, Monad ms)=> Lens ms mg (Either a a) a
-codiag = id ||| id -- DEFAULT
---codiag = Lens $ either (l Left) (l Right) where
---    l lr a = return (return . lr, a)
+--
+-- > eitherL = id ||| id
+eitherL :: (Monad mg, Monad ms)=> Lens ms mg (Either a a) a
+eitherL = id ||| id -- (codiag) DEFAULT
 
 (|||) :: (Monad mg, Monad ms)=> Lens ms mg a c -> Lens ms mg b c -> Lens ms mg (Either a b) c
 Lens f ||| Lens g = Lens $ either (handleL . f) (handleR . g) 
     where handleL = liftM $ first ((liftM Left) .)
           handleR = liftM $ first ((liftM Right) .)
 
--- TODO: commit
---       delete or stash notes
---       explore monadic lenses (is the concept sound)
+
+
+-- from Control.Categorical.Distributive :
+
+--RULES
+--"factor . distribute" factor . distribute = id
+--"distribute . factor" distribute . factor = id
+
+factorL :: (Monad mg, Monad ms)=>Lens ms mg (Either (a,b) (a,c)) (a, Either b c)
+factorL = Lens $ either (\(a,b)-> return (s ,(a, Left b))) (\(a,c)-> return (s, (a, Right c)))
+    where s (a, ebc) = return $ either (Left . (,) a) (Right . (,) a) ebc
+--factor = second inl ||| second inr -- DEFAULT
+
+
+distributeL :: (Monad mg, Monad ms)=>Lens ms mg (a, Either b c) (Either (a,b) (a,c))
+distributeL = Lens $ \(a,ebc)-> 
+    return (return . factor, bimap ((,) a) ((,) a) ebc)
+
+
+
+-- TODO: explore monadic lenses (is the concept sound)
 --       decide on naming
 --       initial release
 --       template haskell library
-
-
-
-{-
- - ----------------------------------
- - ATTEMPTED INSTANCES / EXPERIMENTS
- - ----------------------------------
-  
--- ALSO what about a combinator that is passed an (b -> a) for cases of sum
---     types (see C.Functor attempt). This would be a kind of default setter.
---     If we do this, create a wrapper type and define instances for sums.
-
-
-
-
-   C.FUNCTOR (Maybe/Either)
---
--- This doesn't work for similar reasons to some of these other instances I've
--- played with: see attempt at Bifunctor for sum type:
-
-instance C.Functor Maybe Lens Lens where
-    fmap (Lens f) = Lens l
-        where l (Just a) = let (ba,b) = f a
-                            in (fmap ba, Just b)
-              -- this violates put-get:
-              l Nothing = (const Nothing, Nothing)
-
-
-
-   BIFUNCTOR (Either):
---
--- This has complications on the 'put' side, where a constructor mismatch
--- returns the original structure unchanged:
---    put l (Left 1) (Right 'a') -- ???
--- this, once again, violates put-get.
-
-instance (Monad ms, Monad mg)=> Bifunctor Either (Lens ms mg) (Lens ms mg) (Lens ms mg) where
-    --bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
-  
-  
-  
-   SEMIGROUP:
-  
--- NOTE: This violates both get-put and put-get
--- Use case: 
---     combine two lenses fetching Int leafs of a tree:
---        Lens Tree Int <> Lens Tree Int
---     get: 
---          takes the sum of the leaves
---     put: 
---          creates two subtrees: 
---              tree with leaf1 = x
---              tree with leaf2 = x
---          combines the two trees under a new root
---
--- I'm not sure that would be useful.
-
-instance (Semigroup b, Semigroup a)=> Semigroup (Lens ms mg a b) where
-    (Lens f) <> (Lens g) = Lens $ \a-> do
-        (bMa,b) <- f a
-     -- simplified example, without monads:
-    (Lens f) <> (Lens g) = Lens $ \a-> 
-        (ba1, b1) = f a
-        (ba2, b2) = g a
-        in (\b'-> ba1 b' <> ba2 b', b1 <> b2)
-
-
-   PRECARTESIAN:
-
-   TODO:   - inspect rules and laws
-           - flush out notion of "sequencing" in PreCartesian
-
- {- RULES
-"fst . diag"      fst . diag = id  CHECK
-"snd . diag"    snd . diag = id  CHECK
-"fst . f &&& g" forall f g. fst . (f &&& g) = f  
-"snd . f &&& g" forall f g. snd . (f &&& g) = g
- -}
- 
--- TODO: what about instead of (,) here we use something named something
--- explicity like "Sequence", or at least use a type synonym if possible:
--- then we get functions like 
---     put :: Lens a (Sequence b c) -> Sequence b c -> a -> m a
--- perhaps we can have a nice type operator like
---     (:>>)
--- Can we justify the behavior of (&&&)? 
---
--- NOTE: well-behaved methods here are: fst/snd
-
-instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
-    type Cart.Product (Lens ms mg) = (,)
-  --fst :: Lens (a,b) a
-    fst = Lens $ \(a,b)-> return (\a'-> return (a',b) , a)
-
-  --snd :: Lens (a,b) b
-    snd = Lens $ \(a,b)-> return (\b'-> return (a,b') , b)
-
-    -- The following two lenses are not traditionally "well-behaved" w/r/t the
-    -- so-called "Lens Laws", violating "put-get". However the Lenses here
-    -- are in essence a composition of a put-put and get-get. This seems 
-    -- perfectly reasonable to me: we allow lens /sequencing/ in addition to
-    -- the lens /chaining/ offered by Category.
-    --
-    -- Actually: (&&&) doesn't behave as we would like. Maybe we have to
-    -- /reverse/ the order on put? would that allow the kind of chaining we're
-    -- looking for?
-
-  --(&&&) :: Lens a b -> Lens a c -> Lens a (b,c)
-    --f &&& g = bimap f g . diag -- DEFAULT (EQUIVALENT? CHECK)
-    (Lens f) &&& (Lens g) = Lens $ \a-> do
-            (bMa,b) <- f a
-            (cMa,c) <- g a
-            -- run set on b', then set on c', sequencing effects
-            let setbc (b',c') = bMa b' >> cMa c'
-            return (setbc, (b, c))
-    -- OR... this violates 3rd/4th laws above. Still it's unfortunate we can't
-    -- seem to get two sequenced puts in a row with the current lens formulation.
-    (Lens f) &&& (Lens g) = Lens $ \a-> do
-            (bMa,b) <- f a
-            (cMa,c) <- g a  -- should the gets be chained in a similar way?
-            let setbc (b',c') = bMa b' >>= g >>= \(cMa',_)-> cMa c'  -- i.e. set b, open, set c
-            return (setbc, (b,c))
-    -- OR... 
-    (Lens f) &&& (Lens g) = Lens $ \a-> do 
-            (bMa,b) <- f a
-            (_,  c) <- g a
-            return(\(b',c')->bMa b'
-
-  --diag :: Lens a (a,a)
-    --diag = id &&& id --DEFAULT
-    --diag = Lens $ \a -> return (\(_,a')-> return a', (a,a))
-
--- --------------------
-
--- Here `inl` and `inr` definitely would violate put-get. 
---     e.g. put inl (Right foo)
--- Also we need an instance Bifunctor for Either as well
---     bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
--- which shows the same issue.
-
-{- RULES
-"codiag . inl"  codiag . inl = id
-"codiag . inr"    codiag . inr = id
-"(f ||| g) . inl" forall f g. (f ||| g) . inl = f
-"(f ||| g) . inr" forall f g. (f ||| g) . inr = g
- -}
-
--- NOTE: well-behaved methods here are: codiag/(|||)
- 
-instance PreCoCartesian Lens where
-    type Sum Lens = Either
-  --inl :: Lens a (Either a b)
-    inl = Lens $ \a-> return (either id (const a), Left a)
-  --inr :: Lens b (Either a b)
-    inr = Lens $ \b-> return (either (const b) id, Right b)
-  --codiag :: Lens (Either a a) a
-    --codiag = id ||| id -- DEFAULT
-    codiag = Lens $ either (l Left) (l Right) where
-        l lr a = return (return . lr, a)
-  --(|||) :: Lens a c -> Lens b c -> Lens (Either a b) c
-    --f ||| g = codiag . bimap f g  -- DEFAULT
-    --(Lens f) ||| (Lens g) = Lens $ either (mkl Left f) (mkl Right g)
-    --    where mkl c l = bimap (liftM c .) c . l
-
-
--- --------------------
--- DEPENDS ON MONOIDAL, IS Exp LENS? HMMMM...
--- LENS IS VERY UNLIKELY TO BE A CCC AFAICT:
-instance CCC Lens where
-    type Exp Lens = ??
-    apply :: Lens (?? a b, a) b  -- implies at least: given a 'b', produce an 'a'
-    curry :: Lens (a,b) c -> Lens a (?? b c) -- implies: given a (Lens (a,b) c) and a (Lens b c), produce an 'a'
-    curry (Lens f) = 
-        Lens $ \a ->
-            \lbc-> 
-            Lens $ \b-> do 
-                (cMab,c) <- f (a,b)
-                return(\c'-> liftM snd $ cMab c' , c)  -- ...erm. Djinn might be helpful here.
-    uncurry :: ...
--- --------------------
-
-RULES
-"factor . distribute" factor . distribute = id
-"distribute . factor" distribute . factor = id
-
-  where...
-    factor :: Lens (Either (a,b) (a,c)) (a, Either b c)
-    factor = second inl ||| second inr
-
-
--- sub-class of PreCartesian
-instance (Monad ms, Monad mg)=> Distributive (Lens ms mg) where
-  --distribute :: Lens (a, Either b c) (Either (a,b) (a,c))
-    distribute = Lens $ \(a,ebc)-> 
-        return (return . factor, bimap ((,) a) ((,) a) ebc)
-
--}
 
 
 
