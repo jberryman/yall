@@ -7,11 +7,15 @@ import Control.Category
 
 -- from 'categories':
 import Control.Categorical.Bifunctor
+import qualified Control.Categorical.Functor as C
 import Control.Category.Associative
 import Control.Category.Braided
 --import qualified Control.Category.Cartesian as Cart
 import Control.Category.Monoidal
 import Control.Category.Distributive
+
+-- from 'semigroups':
+--import Data.Semigroup
 
 import Control.Monad
 import Control.Monad.Trans.Class
@@ -37,6 +41,7 @@ instance (Monad ms, Monad mg)=> Category (Lens ms mg) where
 
 -- BIFUNCTOR: --
 instance (Monad ms, Monad mg)=> PFunctor (,) (Lens ms mg) (Lens ms mg) where
+  --first :: Lens a b -> Lens (a,x) (b,x)
     first = firstDefault
 
 instance (Monad ms, Monad mg)=> QFunctor (,) (Lens ms mg) (Lens ms mg) where
@@ -50,14 +55,20 @@ instance (Monad ms, Monad mg)=> Bifunctor (,) (Lens ms mg) (Lens ms mg) (Lens ms
             let setCont (b',d') = liftM2 (,) (bMa b') (dMc d')
             return (setCont, (b,d))
 
-{-
--- This has complications on the 'put' side, where a constructor mismatch
--- returns the original structure unchanged:
---    put l (Left 1) (Right 'a') -- ???
--- this, once again, violates put-get.
-instance (Monad ms, Monad mg)=> Bifunctor Either (Lens ms mg) (Lens ms mg) (Lens ms mg) where
-    --bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
--}
+instance (Monad ms, Monad mg)=> C.Functor ((,) x) (Lens ms mg) (Lens ms mg) where
+    fmap = second
+
+-- EXPLORE MORE IF TIME:
+-- get in terms of Functor
+-- instance (Monad ms, Monad mg)=> C.Functor ((->) r) (Lens ms mg) (Lens ms mg) where
+-- instance (Monad ms, Monad mg)=> C.Functor [] (Lens ms mg) (Lens ms mg) where
+--     fmap (Lens f) = Lens $ \as -> do
+--         bMabs <- mapM f as
+--         return (error "violates put-get if we just do a zip" , map snd bMabs)
+-- instance (Monad ms, Monad mg)=> C.Functor IO (Lens ms mg) (Lens ms mg) where
+--     fmap (Lens f) = Lens $ \ioa-> do
+--         (bMa,b) <- liftIO f ioa
+--         return (??, return b)
 
 
 {-  
@@ -100,17 +111,106 @@ instance (Monad ms, Monad mg)=> Comonoidal (Lens ms mg) (,) where
     coidl = Lens $ \a-> return (\((),a')-> return a', ((),a))
     coidr = Lens $ \a-> return (\(a',())-> return a', (a,()))
 
--- ALSO CONSIDER A Monoid INSTANCE FOR Lens
--- ALSO CONSIDER A Bifunctor instance encapsulating:
---     iso :: (a -> b) -> (b -> a) -> Lens a b
---
--- what about this interesting function?
---     unIso :: Lens a b -> (a -> b, b -> a -> a)
+-- combinators from PreCartesian that preserve strict well-behavedness
 
-    
-{- PreCartesian:
- - TODO:   - inspect rules and laws
- -         - flush out notion of "sequencing" in PreCartesian
+fstL :: (Monad mg, Monad ms)=> Lens ms mg (a,b) a
+fstL = Lens $ \(a,b)-> return (\a'-> return (a',b) , a)
+
+sndL :: (Monad mg, Monad ms)=> Lens ms mg (a,b) b
+sndL = Lens $ \(a,b)-> return (\b'-> return (a,b') , b)
+
+-- combinators from PreCoCartesian that preserve strict well-behavedness
+
+-- TODO: change name here:
+-- | 
+-- > codiag = id ||| id
+codiag :: (Monad mg, Monad ms)=> Lens ms mg (Either a a) a
+codiag = id ||| id -- DEFAULT
+--codiag = Lens $ either (l Left) (l Right) where
+--    l lr a = return (return . lr, a)
+
+(|||) :: (Monad mg, Monad ms)=> Lens ms mg a c -> Lens ms mg b c -> Lens ms mg (Either a b) c
+Lens f ||| Lens g = Lens $ either (handleL . f) (handleR . g) 
+    where handleL = liftM $ first ((liftM Left) .)
+          handleR = liftM $ first ((liftM Right) .)
+
+-- TODO: commit
+--       delete or stash notes
+--       explore monadic lenses (is the concept sound)
+--       decide on naming
+--       initial release
+--       template haskell library
+
+
+
+{-
+ - ----------------------------------
+ - ATTEMPTED INSTANCES / EXPERIMENTS
+ - ----------------------------------
+  
+-- ALSO what about a combinator that is passed an (b -> a) for cases of sum
+--     types (see C.Functor attempt). This would be a kind of default setter.
+--     If we do this, create a wrapper type and define instances for sums.
+
+
+
+
+   C.FUNCTOR (Maybe/Either)
+--
+-- This doesn't work for similar reasons to some of these other instances I've
+-- played with: see attempt at Bifunctor for sum type:
+
+instance C.Functor Maybe Lens Lens where
+    fmap (Lens f) = Lens l
+        where l (Just a) = let (ba,b) = f a
+                            in (fmap ba, Just b)
+              -- this violates put-get:
+              l Nothing = (const Nothing, Nothing)
+
+
+
+   BIFUNCTOR (Either):
+--
+-- This has complications on the 'put' side, where a constructor mismatch
+-- returns the original structure unchanged:
+--    put l (Left 1) (Right 'a') -- ???
+-- this, once again, violates put-get.
+
+instance (Monad ms, Monad mg)=> Bifunctor Either (Lens ms mg) (Lens ms mg) (Lens ms mg) where
+    --bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
+  
+  
+  
+   SEMIGROUP:
+  
+-- NOTE: This violates both get-put and put-get
+-- Use case: 
+--     combine two lenses fetching Int leafs of a tree:
+--        Lens Tree Int <> Lens Tree Int
+--     get: 
+--          takes the sum of the leaves
+--     put: 
+--          creates two subtrees: 
+--              tree with leaf1 = x
+--              tree with leaf2 = x
+--          combines the two trees under a new root
+--
+-- I'm not sure that would be useful.
+
+instance (Semigroup b, Semigroup a)=> Semigroup (Lens ms mg a b) where
+    (Lens f) <> (Lens g) = Lens $ \a-> do
+        (bMa,b) <- f a
+     -- simplified example, without monads:
+    (Lens f) <> (Lens g) = Lens $ \a-> 
+        (ba1, b1) = f a
+        (ba2, b2) = g a
+        in (\b'-> ba1 b' <> ba2 b', b1 <> b2)
+
+
+   PRECARTESIAN:
+
+   TODO:   - inspect rules and laws
+           - flush out notion of "sequencing" in PreCartesian
 
  {- RULES
 "fst . diag"      fst . diag = id  CHECK
@@ -165,7 +265,8 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
     -- OR... 
     (Lens f) &&& (Lens g) = Lens $ \a-> do 
             (bMa,b) <- f a
-            (\(b',c') -> 
+            (_,  c) <- g a
+            return(\(b',c')->bMa b'
 
   --diag :: Lens a (a,a)
     --diag = id &&& id --DEFAULT
@@ -177,7 +278,7 @@ instance (Monad ms, Monad mg)=> Cart.PreCartesian (Lens ms mg) where
 --     e.g. put inl (Right foo)
 -- Also we need an instance Bifunctor for Either as well
 --     bimap :: Lens a b -> Lens c d -> Lens (Either a c) (Either b d)
--- is that possible?
+-- which shows the same issue.
 
 {- RULES
 "codiag . inl"  codiag . inl = id
@@ -220,7 +321,7 @@ instance CCC Lens where
     uncurry :: ...
 -- --------------------
 
-{- RULES
+RULES
 "factor . distribute" factor . distribute = id
 "distribute . factor" distribute . factor = id
 
@@ -228,7 +329,6 @@ instance CCC Lens where
     factor :: Lens (Either (a,b) (a,c)) (a, Either b c)
     factor = second inl ||| second inr
 
-  -}
 
 -- sub-class of PreCartesian
 instance (Monad ms, Monad mg)=> Distributive (Lens ms mg) where
@@ -239,6 +339,10 @@ instance (Monad ms, Monad mg)=> Distributive (Lens ms mg) where
 -}
 
 
+
+-- TODO: include or not?
+unIso :: (a :-> b) -> (a -> b, b -> a -> a)
+unIso l = (pureGet l, pureSet l)
 
 
 -- -------------------
@@ -267,3 +371,6 @@ maybeGet = get
 -- | > maybeSet l b = runIdentityT . set l b
 maybeSet :: (a :~> b) -> b -> a -> Maybe a
 maybeSet l b = runIdentityT . set l b
+
+
+
