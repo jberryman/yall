@@ -3,9 +3,10 @@ module Data.Yall.Lens (
     {- | 
        TODO General explanatory notes
     -}
+      Lens(..)
     -- * Simple API
     -- ** Pure lenses
-      (:->)
+    , (:->)
     , lens, get, set, modify
     -- ** Partial lenses
     , (:~>)
@@ -16,14 +17,16 @@ module Data.Yall.Lens (
        - polymorphic Failure
        - IO or []
     -}
-    , Lens(..)
-    , lensM, getM, setM, modifyM 
-    -- ** Monadic set variants
+    , LensM
+    , lensM
+    , getM, setM, modifyM 
+    -- ** Monadic set / create / modify variants
     {- | The setter continuation is embedded in the getter\'s Monadic
        environment, so we offer several ways of combining different types of
        getter environments(@m@) and setter environments (@w@), for Lenses
        with complex effects.
     -}
+    , lensMW
     , setLiftM, setLiftW, setJoin
 
     ) where
@@ -61,30 +64,14 @@ import Data.Functor.Identity
 -- constrain these 'm's to Monad?
 newtype Lens ms mg a b = Lens { runLens :: a -> mg (b -> ms a, b) }
 
--- TODO - make sure our approach to partial lenses will actually work for our PEZ case
---            a -> Maybe (b -> IdentityT Maybe a, b) -- NOPE!
---        actually it won't. We need:
---            type (:~>) = Lens Identity Maybe
---        we also will necessarily have to change lensM to:
---            lensM :: (Monad m)=> (a -> m b) -> (a -> m (b -> a)) -> Lens Identity m a b
---        this is both a bit awkward, and also reverses the order of types. --        
---        So `lens` will have to be switched around as well.
---
---        What about:
---            type (:~>) = Lens Identity (MaybeT Identity)
---        ...but we have no way to automatically run the arbitrary transformer.
---        I suppose we need, in general:
---            getM, setM, modifyM :: Lens Identity m
---        ...then different setters (and modifiers) as we have already defined.
---            
---
---
---
--- TODO - modify this so that we create a Lens in line with what setM acts on
---      - then make sure lensM in simple API works as expected, then commit that file
---      - then work on test.
-lensM :: (Monad m)=> (a -> m b) -> (b -> a -> w a) -> Lens w m a b
-lensM g s = Lens $ \a-> liftM ((,) $ flip s a) (g a)
+-- | A lens in which the setter returns its result in the trivial identity 
+-- monad. This is appropriate e.g. for traditional partial lenses, where there is
+-- a potential that the lens could fail only on the /outer/ constructor.
+type LensM = Lens Identity
+
+-- | Create a monadic lens from a getter and setter
+lensM :: (Monad m)=> (a -> m b) -> (a -> m (b -> a)) -> LensM m a b
+lensM g = lensMW g . fmap (liftM $ fmap return)
 
 -- | get, returning the result in a Monadic environment. This is appropriate
 -- e.g. for traditional partial lenses on multi-constructor types. See also
@@ -94,12 +81,19 @@ getM (Lens f) = liftM snd . f
 
 -- | set, returning the result in the getter\'s Monadic environment, running 
 -- the setter\'s trivial Identity monad. 
-setM :: (Monad mg)=> Lens (IdentityT mg) mg a b -> b -> a -> mg a
-setM l b = runIdentityT . setLiftM l b
+setM :: (Monad mg)=> LensM mg a b -> b -> a -> mg a
+setM (Lens f) b = liftM (runIdentity . ($ b) . fst) . f
 
 -- | modify the inner value within the getter\'s Monadic environment 
-modifyM :: (Monad mg)=> Lens (IdentityT mg) mg a b -> (b -> b) -> a -> mg a
+modifyM :: (Monad mg)=> LensM mg a b -> (b -> b) -> a -> mg a
 modifyM = undefined
+
+-- | Create a monadic Lens from a setter and getter.
+--
+-- > lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
+lensMW :: (Monad m)=> (a -> m b) -> (a -> m (b -> w a)) -> Lens w m a b
+lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
+
 
 -- | set, 'lift'ing the outer (getter\'s) Monadic environment to the type of
 -- the setter monad transformer.
@@ -263,13 +257,13 @@ isoL (Iso f g) = Lens $ fmap (liftM ((,) g)) f
 -- Simple API
 
 -- | a simple lens, suitable for single-constructor types
-type (:->) = Lens (IdentityT Identity) Identity
+type (:->) = LensM Identity
 
 -- | Create a pure Lens from a getter and setter
 --
 -- > lens g = lensM (fmap return g) . fmap (fmap return)
-lens :: (a -> b) -> (b -> a -> a) -> (a :-> b)
-lens g = lensM (fmap return g) . fmap (fmap return)
+lens :: (a -> b) -> (a -> b -> a) -> (a :-> b)
+lens g = lensM (fmap return g) . fmap return
 
 -- | Run the getter function of a pure lens
 --
@@ -289,4 +283,4 @@ modify l b = runIdentity . modifyM l b
 -- | a lens that can fail in the Maybe monad on the outer type. Suitable for a
 -- normal lens on a multi-constructor type. The more general 'setM', 'getM', etc.
 -- can be used with this type.
-type (:~>) = Lens (IdentityT Maybe) Maybe
+type (:~>) = LensM Maybe
