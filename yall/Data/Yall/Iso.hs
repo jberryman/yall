@@ -12,8 +12,7 @@ module Data.Yall.Iso (
   -- ** Pure isomorphisms
   , (:<->)
   , iso
-  , ($-)
-  , (-$)
+  , ($-), (-$)
   -- *** Pre-defined isomorphisms
   {- | Note: while all of these are pure and could be expressed as '(:<->)', we
      define them polymorphically in @Monad@ for maximum flexibility in
@@ -24,6 +23,7 @@ module Data.Yall.Iso (
      of these should be obvious.
   -}
   , wordsI, showI, linesI, curryI, enumI, integerI, rationalI, zipI
+  , incrementI, incrementByI
 
   -- ** Partial isomorphisms
   , (:<~>)
@@ -91,3 +91,8 @@ rationalI = iso toRational fromRational
 zipI :: (Monad m, Monad w)=> Iso w m ([a],[b]) [(a,b)]
 zipI = iso (uncurry zip) unzip
 
+incrementI :: (Monad m, Monad w, Num a)=> Iso w m a a
+incrementI = incrementByI 1
+
+incrementByI :: (Monad m, Monad w, Num a)=> a -> Iso w m a a
+incrementByI n = iso (+n) (subtract n)
