@@ -61,6 +61,28 @@ import Data.Functor.Identity
 -- constrain these 'm's to Monad?
 newtype Lens ms mg a b = Lens { runLens :: a -> mg (b -> ms a, b) }
 
+-- TODO - make sure our approach to partial lenses will actually work for our PEZ case
+--            a -> Maybe (b -> IdentityT Maybe a, b) -- NOPE!
+--        actually it won't. We need:
+--            type (:~>) = Lens Identity Maybe
+--        we also will necessarily have to change lensM to:
+--            lensM :: (Monad m)=> (a -> m b) -> (a -> m (b -> a)) -> Lens Identity m a b
+--        this is both a bit awkward, and also reverses the order of types. --        
+--        So `lens` will have to be switched around as well.
+--
+--        What about:
+--            type (:~>) = Lens Identity (MaybeT Identity)
+--        ...but we have no way to automatically run the arbitrary transformer.
+--        I suppose we need, in general:
+--            getM, setM, modifyM :: Lens Identity m
+--        ...then different setters (and modifiers) as we have already defined.
+--            
+--
+--
+--
+-- TODO - modify this so that we create a Lens in line with what setM acts on
+--      - then make sure lensM in simple API works as expected, then commit that file
+--      - then work on test.
 lensM :: (Monad m)=> (a -> m b) -> (b -> a -> w a) -> Lens w m a b
 lensM g s = Lens $ \a-> liftM ((,) $ flip s a) (g a)
 

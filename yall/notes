@@ -1,8 +1,11 @@
-{-
  - ----------------------------------
  - ATTEMPTED INSTANCES / EXPERIMENTS
  - ----------------------------------
-  
+ 
+TODO: 
+    - reconsider some of these instances for 
+
+
 -- ALSO what about a combinator that is passed an (b -> a) for cases of sum
 --     types (see C.Functor attempt). This would be a kind of default setter.
 --     If we do this, create a wrapper type and define instances for sums.
@@ -190,7 +193,5 @@ instance (Monad ms, Monad mg)=> Distributive (Lens ms mg) where
   --distribute :: Lens (a, Either b c) (Either (a,b) (a,c))
     distribute = Lens $ \(a,ebc)-> 
         return (return . factor, bimap ((,) a) ((,) a) ebc)
-
--}
 
 
