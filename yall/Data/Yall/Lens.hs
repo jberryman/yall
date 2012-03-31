@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies , FlexibleInstances #-}
 module Data.Yall.Lens (
     {- | 
        TODO General explanatory notes about monadic lenses + motivation
@@ -175,34 +175,15 @@ instance (Monad w, Monad m)=> Bifunctor (,) (Lens w m) (Lens w m) (Lens w m) whe
             let setCont (b',d') = liftM2 (,) (bMa b') (dMc d')
             return (setCont, (b,d))
 
-instance (Monad w, Monad m)=> C.Functor ((,) x) (Lens w m) (Lens w m) where
-    fmap = second
 
-{-
-TODO: EXPLORE THIS
-instance (Monad w, Monad m)=> C.Functor ((->) r) (Lens w m) (Lens w m) where
-instance (Monad w, Monad m)=> C.Functor IO (Lens w m) (Lens w m) where
-    fmap (Lens f) = Lens $ \ioa-> do
-        (bMa,b) <- liftIO f ioa
-        return (??, return b)
+-- This lets us turn an effect-ful lens into a pure lens on Monad-wrapped
+-- values. TODO useful to be able to go the other direction?
+instance (Monad m)=>C.Functor m (Lens m m) (Lens Identity Identity) where
+    fmap (Lens f) = Lens $ \ma ->
+        let t = ma >>= f
+            mb2Ima = return . join . ap (liftM fst t)
+         in return (mb2Ima, liftM snd t)
 
--- It seew sum and recursive types will have issues with Functor, which we
--- wouldn't have for a type like Iso. Perhaps we should include such a type
--- instead of the straight iso function in data-lens, e.g.:
---     data Iso m w a b = Iso (a -> m b) (b -> w a)
---     isoL :: Iso a b -> (a :-> b)         -- this NEEDS to be polymorphic in monad, for composability
---     instance C.Functor (Either x) Iso Iso
---     instance C.Functor [] Iso Iso    ... etc.
---
--- Also take a look at notes. Many of those instances could potentially work
--- for an Iso type.
-
-instance (Monad w, Monad m)=> C.Functor [] (Lens w m) (Lens w m) where
-    fmap (Lens f) = Lens $ \as -> do
-        bMabs <- mapM f as
-        return (error "violates put-get if we just do a zip" , map snd bMabs)
-instance (Monad w, Monad m)=> C.Functor (Either x) (Lens w m) (Lens w m) where
--}
 
 
 {-  
