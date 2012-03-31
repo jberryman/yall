@@ -17,10 +17,11 @@ module Data.Yall.Lens (
        - polymorphic Failure
        - IO or []
     -}
+    -- ** Lenses with monadic getters
     , LensM
     , lensM
     , getM, setM, modifyM 
-    -- ** Monadic set / create / modify variants
+    -- ** Monadic variants
     {- | The setter continuation is embedded in the getter\'s Monadic
        environment, so we offer several ways of combining different types of
        getter environments(@m@) and setter environments (@w@), for Lenses
@@ -29,6 +30,43 @@ module Data.Yall.Lens (
     , lensMW
     , setLiftM, setLiftW, setJoin
 
+    -- * Composing Lenses
+    {- |
+    In addition to the usual 'Category' instance, we define instances for
+    'Lens' for a number of category-level abstractions from the "categories"
+    package. Here are the various combinators and pre-defined lenses from these
+    classes, with types shown for a simplified @Lens@ type.
+    -}
+    
+    -- |
+    -- > import Control.Categorical.Bifunctor
+    -- > first :: Lens a b -> Lens (a,x) (b,x)
+    -- > second :: Lens a b -> Lens (x,a) (x,b)
+    -- > bimap :: Lens a b -> Lens x y -> Lens (a,x) (b,y)
+    -- . 
+    -- > import Control.Categorical.Object
+    -- > terminate :: Lens a ()
+    -- .
+    -- > import Control.Category.Associative
+    -- > associate :: Lens ((a,b),c) (a,(b,c))
+    -- > disassociate :: Lens (a,(b,c)) ((a,b),c)
+    -- .
+    -- > import Control.Category.Braided
+    -- > braid :: Lens (a,b) (b,a)
+    -- .
+    -- > import Control.Category.Monoidal
+    -- > idl :: Lens ((), a) a
+    -- > idr :: Lens (a,()) a
+    -- > coidl :: Lens a ((),a)
+    -- > coidr :: Lens a (a,())
+
+    {- |
+    In addition the following cominators and pre-defined lenses are provided.
+    -}
+    , fstL, sndL
+    , eitherL, (|||)
+    , factorL, distributeL
+    , isoL
     ) where
 
 import Data.Yall.Iso
@@ -41,9 +79,9 @@ import Control.Categorical.Bifunctor
 import qualified Control.Categorical.Functor as C
 import Control.Category.Associative
 import Control.Category.Braided
---import qualified Control.Category.Cartesian as Cart
 import Control.Category.Monoidal
 import Control.Category.Distributive
+import Control.Categorical.Object
 
 -- from 'semigroups':
 --import Data.Semigroup
@@ -167,12 +205,11 @@ instance (Monad w, Monad m)=> C.Functor (Either x) (Lens w m) (Lens w m) where
  -  What is this for, and why isn't (->) an instance?
  -  It is mentioned in the lib that (->) lacks an /initial/ object, but I
  -  would guess the missing HasTerminalObject is an oversight
- -
-instance HasTerminalObject Lens where
-    type Terminal Lens = ()
-  --terminate :: Lens a ()
-    terminate = Lens $ \a-> (\()-> a, ())  -- this DOES obey the lens laws
 -}
+instance (Monad w, Monad m)=> HasTerminalObject (Lens w m) where
+    type Terminal (Lens w m) = ()
+  --terminate :: Lens a ()
+    terminate = Lens $ \a-> return (\()-> return a, ()) 
 
 instance (Monad w, Monad m)=> Associative (Lens w m) (,) where
   --associate :: Lens ((a,b),c) (a,(b,c))
