@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies #-}
 module Data.Yall.Lens (
     {- | 
-       TODO General explanatory notes
+       TODO General explanatory notes about monadic lenses + motivation
     -}
       Lens(..)
     -- * Simple API
@@ -123,7 +123,9 @@ setM (Lens f) b = liftM (runIdentity . ($ b) . fst) . f
 
 -- | modify the inner value within the getter\'s Monadic environment 
 modifyM :: (Monad m)=> LensM m a b -> (b -> b) -> a -> m a
-modifyM = undefined
+modifyM (Lens f) g a = do
+    (bMa, b) <- f a
+    return (runIdentity $ bMa $ g b)
 
 -- | Create a monadic Lens from a setter and getter.
 --
@@ -140,12 +142,14 @@ setLiftM (Lens f) b = join . liftM (($ b) . fst) . lift . f
 -- | set, like 'setLiftM' but we 'lift' the /inner/ setter\'s environment to
 -- the outer getter monad transformer.
 setLiftW :: (MonadTrans t, Monad (t w), Monad w)=> Lens w (t w) a b -> b -> a -> t w a
-setLiftW (Lens f) b = undefined
+setLiftW (Lens f) b a = lift . ($ b) . fst =<< f a 
+
+    
 
 -- | set, combining the effects of the identical setter and getter Monads with
 -- 'join'.
 setJoin :: (Monad m)=> Lens m m a b -> b -> a -> m a
-setJoin = undefined
+setJoin (Lens f) b a = f a >>= ($ b) . fst
 
 instance (Monad w, Monad m)=> Category (Lens w m) where
     id = Lens $ return . (,) return
