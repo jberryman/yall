@@ -46,6 +46,7 @@ import Control.Monad
 
 -- from 'categories':
 import qualified Control.Categorical.Functor as C
+import Control.Categorical.Bifunctor
 
 -- | An Isomorphism or one-to-one mapping between types. These are very similar
 -- to a 'Lens', but are not dependent on context, making them more flexible. The
@@ -82,18 +83,53 @@ instance (Functor f)=> C.Functor f IsoPure IsoPure where
 instance (Monad m)=> C.Functor m (Iso m m) (Iso Identity Identity) where
     fmap (Iso f g) = iso (>>= f) (>>= g)
 
-{- OVERLAPS, NOT AS USEFUL
-instance (Monad m, Monad w, T.Traversable t)=> C.Functor t (Iso w m) (Iso w m) where
-    fmap i = Iso (T.mapM $ apply i) (T.mapM $ unapply i)
+
+
+
+-- Control.Categorical.Bifunctor
+instance (Monad m, Monad w)=> PFunctor (,) (Iso w m) (Iso w m) where
+    first = firstDefault
+instance (Monad m, Monad w)=> QFunctor (,) (Iso w m) (Iso w m) where
+    second = secondDefault
+
+instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
+    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
+        where bimapM x = fmap (uncurry(liftM2 (,))) . bimap x
+
+instance (Monad m, Monad w)=> PFunctor Either (Iso w m) (Iso w m) where
+    first = firstDefault
+instance (Monad m, Monad w)=> QFunctor Either (Iso w m) (Iso w m) where
+    second = secondDefault
+
+instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
+    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
+        where bimapM x = fmap (either (liftM Left) (liftM Right)) . bimap x
+
+-- Does this already exist in Categories? 
+--   :: k (m a) (m b) -> m (k a b)
+--   For k = Either / (,)
+--       m = any Monad
+
+{- WORKS
+instance (Monad m, Monad w)=> PFunctor (,) (Iso w m) (Iso w m) where
+    first = firstDefault
+instance (Monad m, Monad w)=> QFunctor (,) (Iso w m) (Iso w m) where
+    second = secondDefault
+instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
+    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
+        where bimapM x = fmap (uncurry(liftM2 (,))) . bimap x
+-}
+{-
+instance (Monad m, Monad w)=> PFunctor Either (Iso w m) (Iso w m) where
+    first = firstDefault
+instance (Monad m, Monad w)=> QFunctor Either (Iso w m) (Iso w m) where
+    second = secondDefault
+instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
+    bimap (Iso f g) (Iso f' g') = Iso (bimap f f') (bimap g g')
 -}
 
 
-
 {-
--- Control.Categorical.Bifunctor
-instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
-instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
-
 -- Control.Category.Associative
 instance (Monad m, Monad w)=> Associative (Iso w m) (,) where
 instance (Monad m, Monad w)=> Associative (Iso w m) Either where
@@ -110,11 +146,8 @@ instance (Monad m, Monad w)=> Braided (Iso w m) Either where
 instance (Monad m, Monad w)=> Symmetric (Iso w m) (,) where
 instance (Monad m, Monad w)=> Symmetric (Iso w m) Either where
 
-{-  NOPE!
--- Control.Category.Cartesian
--}
-
 distributeI :: Iso (a, Either b c) (Either (a,b) (a,c))
+
 factorI :: (Either (a,b) (a,c)) (a, Either b c)
 
 -- Control.Category.Monoidal
@@ -127,7 +160,6 @@ instance (Monad m, Monad w)=> Comonoidal (Lens w m) (,) where
     coidl = 
     coidr =
 -}
-
 
 
 
