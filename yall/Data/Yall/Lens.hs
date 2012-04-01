@@ -59,6 +59,9 @@ module Data.Yall.Lens (
     -- > idr :: Lens (a,()) a
     -- > coidl :: Lens a ((),a)
     -- > coidr :: Lens a (a,())
+    -- .
+    -- > import qualified Control.Categorical.Functor as C
+    -- > C.fmap :: (Monad m)=> Lens m m a b -> (m a :-> m b)
 
     {- |
     In addition the following cominators and pre-defined lenses are provided.
@@ -88,7 +91,6 @@ import Control.Categorical.Object
 
 import Control.Monad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Identity
 import Data.Functor.Identity
 
 
@@ -177,7 +179,8 @@ instance (Monad w, Monad m)=> Bifunctor (,) (Lens w m) (Lens w m) (Lens w m) whe
 
 
 -- This lets us turn an effect-ful lens into a pure lens on Monad-wrapped
--- values. TODO useful to be able to go the other direction?
+-- values. 
+-- TODO     - useful to be able to go the other direction? e.g. :: (m a :-> m b) -> Lens m m a b
 instance (Monad m)=>C.Functor m (Lens m m) (Lens Identity Identity) where
     fmap (Lens f) = Lens $ \ma ->
         let t = ma >>= f
