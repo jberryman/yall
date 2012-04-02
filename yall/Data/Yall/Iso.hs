@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators , MultiParamTypeClasses , FlexibleInstances, FlexibleContexts, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators , MultiParamTypeClasses , FlexibleInstances, FlexibleContexts, GeneralizedNewtypeDeriving , TypeFamilies #-}
 module Data.Yall.Iso (
  {- |
   Iso is similar but more flexible than Lens in that they have no dependency on
@@ -33,9 +33,7 @@ module Data.Yall.Iso (
 
 
 -- TODO: 
--- lots of instances, other useful pre-defined Iso s
--- refer to: http://hackage.haskell.org/packages/archive/partial-isomorphisms/0.2/doc/html/Control-Isomorphism-Partial-Prim.html
--- ...for ideas on which of these abstractions apply
+--    - derive instances for IsoPure
 
 
 import Prelude hiding ((.),id)
@@ -47,6 +45,11 @@ import Control.Monad
 -- from 'categories':
 import qualified Control.Categorical.Functor as C
 import Control.Categorical.Bifunctor
+import Control.Category.Associative
+import Control.Category.Braided
+import Control.Category.Monoidal
+import Control.Category.Distributive
+
 
 -- | An Isomorphism or one-to-one mapping between types. These are very similar
 -- to a 'Lens', but are not dependent on context, making them more flexible. The
@@ -77,8 +80,9 @@ fromPure (IsoPure (Iso f g)) = iso (fmap runIdentity f) (fmap runIdentity g)
 
 -- Control.Categorical.Functor
 instance (Functor f)=> C.Functor f IsoPure IsoPure where
-    fmap (IsoPure (Iso f g)) = IsoPure $ iso (ifmap' f) (ifmap' g)
-        where ifmap' = fmap . fmap runIdentity
+    fmap (IsoPure (Iso f g)) = 
+        IsoPure $ iso (fmap $ fmap runIdentity f) (fmap $ fmap runIdentity g)
+
 
 instance (Monad m)=> C.Functor m (Iso m m) (Iso Identity Identity) where
     fmap (Iso f g) = iso (>>= f) (>>= g)
@@ -93,8 +97,10 @@ instance (Monad m, Monad w)=> QFunctor (,) (Iso w m) (Iso w m) where
     second = secondDefault
 
 instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
-    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
-        where bimapM x = fmap (uncurry(liftM2 (,))) . bimap x
+    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM' g g')
+        -- WHY DOES TypeFamilies CAUSE PROBLEMS WITH THIS?:
+        where bimapM x = fmap extractJoinT . bimap x
+              bimapM' x = fmap extractJoinT . bimap x
 
 instance (Monad m, Monad w)=> PFunctor Either (Iso w m) (Iso w m) where
     first = firstDefault
@@ -102,66 +108,58 @@ instance (Monad m, Monad w)=> QFunctor Either (Iso w m) (Iso w m) where
     second = secondDefault
 
 instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
-    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
-        where bimapM x = fmap (either (liftM Left) (liftM Right)) . bimap x
+    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM' g g')
+        where bimapM x = fmap extractJoinE . bimap x
+              bimapM' x = fmap extractJoinE . bimap x
+
 
 -- Does this already exist in Categories? 
---   :: k (m a) (m b) -> m (k a b)
+--  :: k (m a) (m b) -> m (k a b)
 --   For k = Either / (,)
 --       m = any Monad
+extractJoinE :: (Monad m)=> Either (m a) (m b) -> m (Either a b)
+extractJoinE = either (liftM Left) (liftM Right)
+extractJoinT :: (Monad m)=> (m a, m b) -> m (a,b)
+extractJoinT = uncurry $ liftM2 (,)
 
-{- WORKS
-instance (Monad m, Monad w)=> PFunctor (,) (Iso w m) (Iso w m) where
-    first = firstDefault
-instance (Monad m, Monad w)=> QFunctor (,) (Iso w m) (Iso w m) where
-    second = secondDefault
-instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
-    bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM g g')
-        where bimapM x = fmap (uncurry(liftM2 (,))) . bimap x
--}
-{-
-instance (Monad m, Monad w)=> PFunctor Either (Iso w m) (Iso w m) where
-    first = firstDefault
-instance (Monad m, Monad w)=> QFunctor Either (Iso w m) (Iso w m) where
-    second = secondDefault
-instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
-    bimap (Iso f g) (Iso f' g') = Iso (bimap f f') (bimap g g')
--}
-
-
-{-
 -- Control.Category.Associative
 instance (Monad m, Monad w)=> Associative (Iso w m) (,) where
-instance (Monad m, Monad w)=> Associative (Iso w m) Either where
+    associate = iso associate disassociate
 
+instance (Monad m, Monad w)=> Associative (Iso w m) Either where
+    associate = iso associate disassociate
+    
 instance (Monad m, Monad w)=> Disassociative (Iso w m) (,) where
+    disassociate = iso disassociate associate
+
 instance (Monad m, Monad w)=> Disassociative (Iso w m) Either where
+    disassociate = iso disassociate associate
 
 -- Control.Category.Braided
 instance (Monad m, Monad w)=> Braided (Iso w m) (,) where
-    braid = 
+    braid = iso braid braid
 instance (Monad m, Monad w)=> Braided (Iso w m) Either where
-    braid = 
+    braid = iso braid braid
 
 instance (Monad m, Monad w)=> Symmetric (Iso w m) (,) where
 instance (Monad m, Monad w)=> Symmetric (Iso w m) Either where
 
-distributeI :: Iso (a, Either b c) (Either (a,b) (a,c))
+distributeI :: (Monad m, Monad w)=> Iso w m (a, Either b c) (Either (a,b) (a,c))
+distributeI = iso distribute factor
 
-factorI :: (Either (a,b) (a,c)) (a, Either b c)
+factorI :: (Monad m, Monad w)=> Iso w m (Either (a,b) (a,c)) (a, Either b c)
+factorI = iso factor distribute
 
 -- Control.Category.Monoidal
 type instance Id (Iso w m) (,) = ()
 
-instance (Monad m, Monad w)=> Monoidal (Lens w m) (,) where
-    idl =
-    idr =
-instance (Monad m, Monad w)=> Comonoidal (Lens w m) (,) where
-    coidl = 
-    coidr =
--}
+instance (Monad m, Monad w)=> Monoidal (Iso w m) (,) where
+    idl = iso idl coidl 
+    idr = iso idr coidr
 
-
+instance (Monad m, Monad w)=> Comonoidal (Iso w m) (,) where
+    coidl =  iso coidl idl 
+    coidr = iso coidr idr 
 
 
 -- | See also an Iso wrapped in 'Dual'
