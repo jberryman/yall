@@ -33,16 +33,11 @@ module Data.Yall.Iso (
   )  where
 
 
--- TODO: 
---    - derive instances for IsoPure
---    - clean up docs + export list
-
 
 import Prelude hiding ((.),id)
 import Control.Category
 import Data.Functor.Identity
 import Control.Monad
---import qualified Data.Traversable as T
 
 -- from 'categories':
 import qualified Control.Categorical.Functor as C
@@ -189,6 +184,7 @@ instance (Monad m, Monad w)=> Disassociative (Iso w m) Either where
 -- Control.Category.Braided
 instance (Monad m, Monad w)=> Braided (Iso w m) (,) where
     braid = iso braid braid
+
 instance (Monad m, Monad w)=> Braided (Iso w m) Either where
     braid = iso braid braid
 
@@ -220,17 +216,21 @@ inverseI (Iso f g) = Iso g f
 -- | a partial Isomorphism
 type a :<~> b = Iso Maybe Maybe a b
 
------ re-export in Data.Yall:
-
--- | pure 
+-- | pure Iso
 type a :<-> b = Iso Identity Identity a b
 
 iso :: (Monad m, Monad w)=> (a -> b) -> (b -> a) -> Iso w m a b
 iso f g = Iso (fmap return f) (fmap return g)
 
+-- | apply the forward function
+-- 
+-- > i $- a = runIdentity $ apply i a
 ($-) :: (a :<-> b) -> a -> b
 i $- a = runIdentity $ apply i a
 
+-- | apply the backward function
+-- 
+-- > i -$ b = runIdentity $ unapply i b
 (-$) :: (a :<-> b) -> b -> a
 i -$ b = runIdentity $ unapply i b
 

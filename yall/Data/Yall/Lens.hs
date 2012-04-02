@@ -244,16 +244,15 @@ sndL :: (Monad m, Monad w)=> Lens w m (a,b) b
 sndL = Lens $ \(a,b)-> return (\b'-> return (a,b') , b)
 
 
--- combinators from PreCoCartesian that preserve strict well-behavedness
+-- borrowed from PreCoCartesian that preserve strict well-behavedness
 
--- | 
+-- | codiag from Cartesian
 --
 -- > eitherL = id ||| id
 eitherL :: (Monad m, Monad w)=> Lens w m (Either a a) a
 eitherL = id ||| id -- (codiag) DEFAULT
 
 
--- TODO: Iso will be a proper PreCrtesian, so maybe we don't want to steal this name:
 (|||) :: (Monad m, Monad w)=> Lens w m a c -> Lens w m b c -> Lens w m (Either a b) c
 Lens f ||| Lens g = Lens $ either (handleL . f) (handleR . g) 
     where handleL = liftM $ first (liftM Left .)
