@@ -26,6 +26,7 @@ module Data.Yall.Iso (
   -}
   , wordsI, showI, linesI, curryI, enumI, integerI, rationalI, zipI
   , incrementI, incrementByI, consI
+  , distributeI, factorI
 
   -- ** Partial isomorphisms
   , (:<~>)
@@ -34,6 +35,7 @@ module Data.Yall.Iso (
 
 -- TODO: 
 --    - derive instances for IsoPure
+--    - clean up docs + export list
 
 
 import Prelude hiding ((.),id)
@@ -64,7 +66,58 @@ instance (Monad m, Monad w)=> Category (Iso w m) where
 
 -- | A wrapper for a more @(->)@-like Functor instances
 newtype IsoPure a b = IsoPure { isoPure :: Iso Identity Identity a b }
-    deriving (Category) -- ...
+    deriving (Category) 
+
+-- ghetto deriving:
+pureWrapped :: (Iso Identity Identity a1 b1 -> Iso Identity Identity a b)
+                              -> IsoPure a1 b1
+                              -> IsoPure a b
+pureWrapped2 ::                (Iso Identity Identity a1 b1
+                                -> Iso Identity Identity a2 b2
+                                -> Iso Identity Identity a b)
+                               -> IsoPure a1 b1
+                               -> IsoPure a2 b2
+                               -> IsoPure a b
+pureWrapped2 f a b = IsoPure $ f (isoPure a) (isoPure b)
+pureWrapped f = IsoPure . f . isoPure
+
+instance PFunctor (,) IsoPure IsoPure where
+    first = pureWrapped first
+instance QFunctor (,) IsoPure IsoPure where
+    second = pureWrapped second
+instance Bifunctor (,) IsoPure IsoPure IsoPure where
+    bimap = pureWrapped2 bimap
+instance PFunctor Either IsoPure IsoPure where
+    first = pureWrapped first
+instance QFunctor Either IsoPure IsoPure where
+    second = pureWrapped second
+instance Bifunctor Either IsoPure IsoPure IsoPure where
+    bimap = pureWrapped2 bimap
+
+instance Associative IsoPure (,) where
+    associate = IsoPure associate
+instance Associative IsoPure Either where
+    associate = IsoPure associate
+instance Disassociative IsoPure (,) where
+    disassociate = IsoPure disassociate
+instance Disassociative IsoPure Either where
+    disassociate = IsoPure disassociate
+
+instance Braided IsoPure (,) where
+    braid = IsoPure braid
+instance Braided IsoPure Either where
+    braid = IsoPure braid
+instance Symmetric IsoPure Either where
+instance Symmetric IsoPure (,) where
+
+type instance Id IsoPure (,) = ()
+instance Monoidal IsoPure (,) where
+    idl = IsoPure idl
+    idr = IsoPure idr
+instance Comonoidal IsoPure (,) where
+    coidl = IsoPure coidl
+    coidr = IsoPure coidr
+
 
 -- | A more categorical 'fmap', with wrapping / unwrapping for convenience. See
 -- also the 'C.Functor' instances for 'Iso'.
@@ -83,10 +136,8 @@ instance (Functor f)=> C.Functor f IsoPure IsoPure where
     fmap (IsoPure (Iso f g)) = 
         IsoPure $ iso (fmap $ fmap runIdentity f) (fmap $ fmap runIdentity g)
 
-
 instance (Monad m)=> C.Functor m (Iso m m) (Iso Identity Identity) where
     fmap (Iso f g) = iso (>>= f) (>>= g)
-
 
 
 

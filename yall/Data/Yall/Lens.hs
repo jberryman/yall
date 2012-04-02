@@ -72,6 +72,13 @@ module Data.Yall.Lens (
     , isoL
     ) where
 
+-- TODO
+--     - for GHC 7.2, EK has switched to using DefaultSignatures in e.g. Bifunctor. See:
+--          https://github.com/ekmett/categories/commit/81857ce79d6c24be08d827f115109f1c6b8971ea
+--       at some point we'll want to upgrade this, and make the appropriate changes
+--     - 
+
+
 import Data.Yall.Iso
 
 import Prelude hiding (id,(.))
