@@ -29,6 +29,8 @@ module Data.Yall.Lens (
     -}
     , lensMW
     , setLiftM, setLiftW, setJoin
+    -- *** Monoid setters
+    , setEmpty, setEmptyM
 
     -- * Composing Lenses
     {- |
@@ -99,6 +101,7 @@ import Control.Categorical.Object
 import Control.Monad
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
+import Data.Monoid
 
 
 {-
@@ -314,3 +317,18 @@ modify l b = runIdentity . modifyM l b
 -- normal lens on a multi-constructor type. The more general 'setM', 'getM', etc.
 -- can be used with this type.
 type (:~>) = LensM Maybe
+
+
+-- TODO: can we convert an Iso to this kind of type?? Is this more appropriate living in Iso??
+
+-- | Set an inner value on an initially 'mempty' value.
+--
+-- > setZero l b = set l b mzero
+setEmpty :: Monoid a => (a :-> b) -> b -> a
+setEmpty l b = set l b mempty
+
+-- | > setZeroM l b = setM l b mzero
+setEmptyM :: (Monoid a, Monad m) => LensM m a b -> b -> m a
+setEmptyM l b = setM l b mempty
+
+--TODO: more set variations?
