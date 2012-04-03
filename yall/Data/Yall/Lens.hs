@@ -37,7 +37,7 @@ module Data.Yall.Lens (
     package. Here are the various combinators and pre-defined lenses from these
     classes, with types shown for a simplified @Lens@ type.
     -}
-    
+    -- TODO: PUT THESE AS COMMENTS TO INSTANCE DECLs? 
     -- |
     -- > import Control.Categorical.Bifunctor
     -- > first :: Lens a b -> Lens (a,x) (b,x)
@@ -298,7 +298,7 @@ lens g = lensM (fmap return g) . fmap return
 -- | Run the getter function of a pure lens
 --
 -- > get l = runIdentity . getM l
-get :: (a :-> b) -> a -> b
+get :: Lens w Identity a b -> a -> b
 get l = runIdentity . getM l
 
 -- | Run the getter function of a pure lens

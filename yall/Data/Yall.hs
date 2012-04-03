@@ -2,8 +2,10 @@
 module Data.Yall (
     {- | 
        This is a subset of 'Data.Yall.Lens', exporting only the basic API.
-       Furthermore, 'lensM', getM, setM, and modifyM are exported with more
-       restrictive types than are found in Data.Yall.Lens
+       Furthermore, 'get', 'lensM', getM, setM, and modifyM are exported with
+       more restrictive types than are found in Data.Yall.Lens, for simplicity.
+
+       You should either import this module, or 'Data.Yall.Lens'.
     -}
     -- * Pure lenses
       (:->)
@@ -13,8 +15,12 @@ module Data.Yall (
     , lensM, getM, setM, modifyM
     ) where
 
-import Data.Yall.Lens hiding (lensM, getM, setM, modifyM)
+import Data.Yall.Lens hiding (get, lensM, getM, setM, modifyM)
 import qualified Data.Yall.Lens as L
+
+-- | Run the getter function of a pure lens
+get :: (a L.:-> b) -> a -> b
+get = L.get
 
 -- | Create a partial lens from a getter and setter
 lensM :: (a -> Maybe b) -> (a -> Maybe (b -> a)) -> (a L.:~> b)
