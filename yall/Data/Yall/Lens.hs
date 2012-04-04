@@ -1,8 +1,22 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies , FlexibleInstances #-}
 module Data.Yall.Lens (
     {- | 
-       TODO General explanatory notes about monadic lenses + motivation
-    -}
+     The Lenses here are parameterized over two Monads (by convention @m@ and
+     @w@), so that the \"extract\" and \"rebuild\" phases of a lens set operation
+     each happen within their own environment. 
+     
+     Concretely, a lens like (':->') with both environments set to the trivial
+     'Identity' Monad, gives us the usual pure lens, whereas something like
+     (':~>'), where the @m@ environment is @Maybe@ gives one possibility for a
+     partial lens. These would be suitable for multi-constructor data types.
+     
+     One might also like to use a lens as an interface to a type, capable of performing
+     validation (beyond the capabilities of the typechecker). In that case the
+     @w@ environment becomes useful, and you might have @:: Lens Maybe Identity
+     PhoneNumber [Int]@.
+
+     See \"Monadic API\" below for a concrete example.
+     -}
       Lens(..)
     -- * Simple API
     -- ** Pure lenses
@@ -13,10 +27,25 @@ module Data.Yall.Lens (
 
     -- * Monadic API
     {- |
-       TODO Insert cool example of Monadic lenses:
-       - polymorphic Failure
-       - IO or []
+    In addition to defining lenses that can fail and perform validation, we
+    have the ability to construct more abstract and expressive Lenses. Here is
+    an example of a lens on the \"N-th\" element of a list, that returns its
+    results in the [] monad:
     -}
+
+-- |
+-- > nth :: LensM [] [a] a
+-- > nth = Lens $ foldr build []
+-- >     where build n l = (return . (: map snd l), n) : map (prepend n) l
+-- >           prepend = first . fmap . liftM . (:)
+--
+--  We can compose this with other lenses like the lens on the @snd@ of a
+--  tuple, just as we would like:
+--
+-- >>> setM (sndL . nth) 0 [('a',1),('b',2),('c',3)]
+-- [[('a',0),('b',2),('c',3)],[('a',1),('b',0),('c',3)],[('a',1),('b',2),('c',0)]]
+
+
     -- ** Lenses with monadic getters
     , LensM
     , lensM
@@ -40,30 +69,31 @@ module Data.Yall.Lens (
     package. Here are the various combinators and pre-defined lenses from these
     classes, with types shown for a simplified @Lens@ type.
     -}
-    -- |
-    -- > import Control.Categorical.Bifunctor
-    -- > first :: Lens a b -> Lens (a,x) (b,x)
-    -- > second :: Lens a b -> Lens (x,a) (x,b)
-    -- > bimap :: Lens a b -> Lens x y -> Lens (a,x) (b,y)
-    -- . 
-    -- > import Control.Categorical.Object
-    -- > terminate :: Lens a ()
-    -- .
-    -- > import Control.Category.Associative
-    -- > associate :: Lens ((a,b),c) (a,(b,c))
-    -- > disassociate :: Lens (a,(b,c)) ((a,b),c)
-    -- .
-    -- > import Control.Category.Braided
-    -- > braid :: Lens (a,b) (b,a)
-    -- .
-    -- > import Control.Category.Monoidal
-    -- > idl :: Lens ((), a) a
-    -- > idr :: Lens (a,()) a
-    -- > coidl :: Lens a ((),a)
-    -- > coidr :: Lens a (a,())
-    -- .
-    -- > import qualified Control.Categorical.Functor as C
-    -- > C.fmap :: (Monad m)=> Lens m m a b -> (m a :-> m b)
+
+-- |
+-- > import Control.Categorical.Bifunctor
+-- > first :: Lens a b -> Lens (a,x) (b,x)
+-- > second :: Lens a b -> Lens (x,a) (x,b)
+-- > bimap :: Lens a b -> Lens x y -> Lens (a,x) (b,y)
+--  
+-- > import Control.Categorical.Object
+-- > terminate :: Lens a ()
+-- 
+-- > import Control.Category.Associative
+-- > associate :: Lens ((a,b),c) (a,(b,c))
+-- > disassociate :: Lens (a,(b,c)) ((a,b),c)
+-- 
+-- > import Control.Category.Braided
+-- > braid :: Lens (a,b) (b,a)
+-- 
+-- > import Control.Category.Monoidal
+-- > idl :: Lens ((), a) a
+-- > idr :: Lens (a,()) a
+-- > coidl :: Lens a ((),a)
+-- > coidr :: Lens a (a,())
+-- 
+-- > import qualified Control.Categorical.Functor as C
+-- > C.fmap :: (Monad m)=> Lens m m a b -> (m a :-> m b)
 
     {- |
     In addition the following combinators and pre-defined lenses are provided.
@@ -74,7 +104,7 @@ module Data.Yall.Lens (
     , isoL
 
     -- * Convenience operators
-    {- | The little "^" hats are actually superscript "L"s (for "Lens") that have fallen over.
+    {- | The little \"^\" hats are actually superscript \"L\"s (for "Lens") that have fallen over.
     -}
        
     , (^$), (^>>=)
@@ -84,7 +114,7 @@ module Data.Yall.Lens (
 --     - for GHC 7.2, EK has switched to using DefaultSignatures in e.g. Bifunctor. See:
 --          https://github.com/ekmett/categories/commit/81857ce79d6c24be08d827f115109f1c6b8971ea
 --       at some point we'll want to upgrade this, and make the appropriate changes
---     - 
+--     - look at some of the looping combinators we use in pez and include here, e.g. untilL :: (a -> Bool) -> Lens a a -> Lens a a
 
 
 import Data.Yall.Iso

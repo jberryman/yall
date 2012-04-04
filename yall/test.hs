@@ -2,9 +2,9 @@ import Data.Yall.Lens
 import Data.Yall.Iso
 
 import Control.Monad
-
 import Prelude hiding ((.),id)
 import Control.Category
+import Control.Categorical.Bifunctor
 
 
 -- -------------------------------------------
@@ -45,8 +45,8 @@ demo0 = getM (testString . testRec . testRec) (C2 "top" (C1 "lens will fail" Tru
 -- on the Nth element of the list:
 nth :: LensM [] [a] a
 nth = Lens $ foldr nthGS []
-    where nthGS n l = (\n'-> return (n':map snd l), n) : map (prepend n) l
-          prepend n0 (f,n1) = (fmap (liftM (n0:)) f,n1)
+    where nthGS n l = (return . (: map snd l), n) : map (prepend n) l
+          prepend = first . fmap . liftM . (:)
 
 -- This composes nicely. Set the Nth element of our list to 0:
 demo1 :: [ [(Char,Int)] ]

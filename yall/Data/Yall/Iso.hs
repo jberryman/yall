@@ -5,6 +5,9 @@ module Data.Yall.Iso (
   context. This flexibility affords a number of nice class instances that we
   don't get with Lens, so these can be quite useful in combination. See 'isoL'
   for converting to 'Lens'.
+
+  A less imprecise name for the code here might be @Bijection@ but no one wants
+  to type that.
  -}
     Iso(..)
   , inverseI
@@ -20,9 +23,9 @@ module Data.Yall.Iso (
      define them polymorphically in @Monad@ for maximum flexibility in
      composing with other @Lens@ or @Iso@.
 
-     Also note that for most of these @apply . unapply@ is not identity. A
-     better name for this might be Bijection? I don't know. The functionality
-     of these should be obvious.
+     Also note that for most of these @apply i . unapply i@ is not strictly
+     @id@, e.g. @zipI@ obviously truncates lists of differing length, etc.
+     This is officially not something I'm concerned about.
   -}
   , wordsI, showI, linesI, curryI, enumI, integerI, rationalI, zipI
   , incrementI, incrementByI, consI
