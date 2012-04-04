@@ -33,7 +33,7 @@ Description:         Why yet /another/ lens library?
                      - a module providing template haskell deriving of Lenses
 
 
-Homepage:            todo
+--Homepage:            todo
 
 License:             BSD3
 
