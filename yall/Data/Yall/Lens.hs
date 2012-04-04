@@ -28,9 +28,10 @@ module Data.Yall.Lens (
        with complex effects.
     -}
     , lensMW
+    , setW, modifyW
     , setLiftM, setLiftW, setJoin
     -- *** Monoid setters
-    , setEmpty, setEmptyM
+    , setEmpty, setEmptyM, setEmptyW
 
     -- * Composing Lenses
     {- |
@@ -39,7 +40,6 @@ module Data.Yall.Lens (
     package. Here are the various combinators and pre-defined lenses from these
     classes, with types shown for a simplified @Lens@ type.
     -}
-    -- TODO: PUT THESE AS COMMENTS TO INSTANCE DECLs? 
     -- |
     -- > import Control.Categorical.Bifunctor
     -- > first :: Lens a b -> Lens (a,x) (b,x)
@@ -106,6 +106,7 @@ import Data.Monoid
 
 {-
  TODO: explore monadic lenses (is the concept sound)
+       bMa -> bWa
        initial release
        template haskell library
 -}
@@ -139,12 +140,18 @@ modifyM (Lens f) g a = do
     (bMa, b) <- f a
     return (runIdentity $ bMa $ g b)
 
+modifyW :: (Monad w)=> Lens w Identity a b -> (b -> b) -> a -> w a
+modifyW (Lens f) g = uncurry ($) . second g . runIdentity . f
+
 -- | Create a monadic Lens from a setter and getter.
 --
 -- > lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
 lensMW :: (Monad m)=> (a -> m b) -> (a -> m (b -> w a)) -> Lens w m a b
 lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
 
+-- | set, with Monadic setter & pure getter
+setW :: (Monad w)=> Lens w Identity a b -> b -> a -> w a
+setW (Lens f) b = ($ b) . fst . runIdentity . f 
 
 -- | set, 'lift'ing the outer (getter\'s) Monadic environment to the type of
 -- the setter monad transformer.
@@ -331,4 +338,8 @@ setEmpty l b = set l b mempty
 setEmptyM :: (Monoid a, Monad m) => LensM m a b -> b -> m a
 setEmptyM l b = setM l b mempty
 
---TODO: more set variations?
+-- | > setEmptyW l b = setW l b mempty
+setEmptyW :: (Monoid a, Monad w) => Lens w Identity a b -> b -> w a
+setEmptyW l b = setW l b mempty
+
+--TODO: more set variations? getEmpty?
