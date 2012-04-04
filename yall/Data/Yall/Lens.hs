@@ -105,9 +105,7 @@ import Data.Monoid
 
 
 {-
- TODO: explore monadic lenses (is the concept sound)
-       bMa -> bWa
-       initial release
+  TODO initial release
        template haskell library
 -}
 
@@ -137,8 +135,8 @@ setM (Lens f) b = liftM (runIdentity . ($ b) . fst) . f
 -- | modify the inner value within the getter\'s Monadic environment 
 modifyM :: (Monad m)=> LensM m a b -> (b -> b) -> a -> m a
 modifyM (Lens f) g a = do
-    (bMa, b) <- f a
-    return (runIdentity $ bMa $ g b)
+    (bWa, b) <- f a
+    return (runIdentity $ bWa $ g b)
 
 modifyW :: (Monad w)=> Lens w Identity a b -> (b -> b) -> a -> w a
 modifyW (Lens f) g = uncurry ($) . second g . runIdentity . f
@@ -174,9 +172,9 @@ instance (Monad w, Monad m)=> Category (Lens w m) where
     id = Lens $ return . (,) return
     (Lens f) . (Lens g) = 
         Lens $ \a-> do 
-            (bMa,b) <- g a
+            (bWa,b) <- g a
             (cMb,c) <- f b
-            return (cMb >=> bMa, c)
+            return (cMb >=> bWa, c)
 
 -- BIFUNCTOR: --
 instance (Monad w, Monad m)=> PFunctor (,) (Lens w m) (Lens w m) where
@@ -189,9 +187,9 @@ instance (Monad w, Monad m)=> QFunctor (,) (Lens w m) (Lens w m) where
 instance (Monad w, Monad m)=> Bifunctor (,) (Lens w m) (Lens w m) (Lens w m) where
     bimap (Lens f) (Lens g) = 
         Lens $ \(a,c)-> do
-            (bMa,b) <- f a                       
+            (bWa,b) <- f a                       
             (dMc,d) <- g c
-            let setCont (b',d') = liftM2 (,) (bMa b') (dMc d')
+            let setCont (b',d') = liftM2 (,) (bWa b') (dMc d')
             return (setCont, (b,d))
 
 
