@@ -66,12 +66,18 @@ module Data.Yall.Lens (
     -- > C.fmap :: (Monad m)=> Lens m m a b -> (m a :-> m b)
 
     {- |
-    In addition the following cominators and pre-defined lenses are provided.
+    In addition the following combinators and pre-defined lenses are provided.
     -}
     , fstL, sndL
     , eitherL, (|||)
     , factorL, distributeL
     , isoL
+
+    -- * Convenience operators
+    {- | The little "^" hats are actually superscript "L"s (for "Lens") that have fallen over.
+    -}
+       
+    , (^$), (^>>=)
     ) where
 
 -- TODO
@@ -341,3 +347,14 @@ setEmptyW :: (Monoid a, Monad w) => Lens w Identity a b -> b -> w a
 setEmptyW l b = setW l b mempty
 
 --TODO: more set variations? getEmpty?
+
+
+-- OPERATORS: ------------------------
+
+-- | > (^$) = get
+(^$) :: Lens w Identity a b -> a -> b 
+(^$) = get
+
+-- | > ma ^>>= l = ma >>= getM l
+(^>>=) :: (Monad m)=> m a -> Lens w m a b -> m b
+ma ^>>= l = ma >>= getM l
