@@ -56,6 +56,7 @@ demo1 = setM (sndL . nth) 0 [('a',1),('b',2),('c',3)]
 -- -------------------------------------------
 -- LENSES WITH MONADIC SETTER
 
+-- TODO: THIS COULD BE AN ISO. ALSO CONSIDER BIND FUNCTIONS TO INJECT FUNCS :: s -> m (), SIMPLY ADD EFFECTS
 -- persist modifications to a type to a given file. An effect-ful identity lens.
 persistL :: (Monad m) => FilePath -> Lens IO m String String
 persistL nm = Lens $ \s-> return (\s'-> writeFile nm s' >> return s', s)
@@ -64,18 +65,20 @@ persistL nm = Lens $ \s-> return (\s'-> writeFile nm s' >> return s', s)
 tmpFile = "/tmp/yall-test"
 printFileContents = putStrLn . ("file contents: " ++) =<< readFile tmpFile
 
+-- TODO: THIS OF COURSE COULD ALSO BE AN ISO
 -- build a lens with some pre-defined Iso's that offers a [Int] view on a
 -- string that looks like, e.g. "1 2 3 4 5":
 unserializedL :: (Monad w, Monad m) => Lens w m String [Int]
 unserializedL = isoL $ ifmap (inverseI showI) . wordsI
 
 -- now add "persistence" effects to the above lens so everytime we do a "set"
--- we update the file "yall-test" to redlect the new type.
+-- we update the file "yall-test" to reflect the new type.
 unserializedLP :: (Monad m) => Lens IO m String [Int]
 unserializedLP = unserializedL . persistL tmpFile
 
 demo2 :: IO ()
 demo2 = do
+    -- TODO: IF WE BUILT AN ISO ABOVE, WE COULD USE unapply HERE:
     -- apply the lens setter to `mempty` for some Monoid ([Char] in this case)
     str <- setEmptyW unserializedLP [1..5]
 
@@ -89,4 +92,19 @@ demo2 = do
     print str'
     printFileContents
 
-
+{-
+ - TODO SUMMARY:
+ -
+ - * remove the setEmpty stuff and build using all Iso's above
+ -     - see also Lens.hs
+ - * re-arrange order of types for set and use let-floating, so that we are
+ -   most efficient when partially-applying in zipper scenario
+ -     set :: (a :-> b) -> a -> b -> a
+ - * make monadic interface a class: 
+ -     class LensM l where
+ -         setM :: l m a b -> ... -> m a
+ -         getM :: ... -> m b
+ -         modifyM f = setM . f . getM
+ -     - make (Lens Identity) an instance
+ -     - provide newtype wrappers for other "lifting" mechanisms to support this interface
+ -}

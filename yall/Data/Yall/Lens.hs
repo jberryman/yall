@@ -101,7 +101,8 @@ module Data.Yall.Lens (
     , fstL, sndL
     , eitherL, (|||)
     , factorL, distributeL
-    , isoL
+    -- ** Lenses from Isomorphisms
+    , isoL , residualL
 
     -- * Convenience operators
     {- | The little \"^\" hats are actually superscript \"L\"s (for "Lens") that have fallen over.
@@ -322,10 +323,17 @@ distributeL = Lens $ \(a,ebc)->
 
 
 
--- | Convert an isomorphism to a 'Lens'
+-- | Convert an isomorphism @i@ to a 'Lens'. When @apply i . unapply i =
+-- unapply i . apply i = id@, the resulting lens will be well-behaved.
 isoL :: (Monad m, Monad w)=> Iso m w a b -> Lens m w a b
 isoL (Iso f g) = Lens $ fmap (liftM ((,) g)) f
 
+-- | Convert an isomorphism between a value @a@ and a tuple of a value @b@ with
+-- some \"residual\" value @r@. 
+residualL :: (Monad m, Monad w)=> Iso m w a (b,r) -> Lens m w a b
+residualL (Iso f g) = Lens $ \a-> do
+    (b,r) <- f a
+    return (\b'-> g (b',r), b)
 
 -- -------------------
 -- Simple API
@@ -360,7 +368,37 @@ modify l b = runIdentity . modifyM l b
 type (:~>) = LensM Maybe
 
 
--- TODO: can we convert an Iso to this kind of type?? Is this more appropriate living in Iso??
+-- TODO: get rid of this and instead have a conversion to Iso function
+--       rename other to-Iso conversion functions to make some kind of sense
+--           lensI :: Monoid a=> Lens a b -> Iso a b
+--           lensI l = Iso (getM l) (flip (setM l) mempty)
+--       does this make an isomorphism of a well-behaved lens?
+--           get l . flip (set l) mempty == id ?
+--              get . set mempty OKAY
+--           flip (set l) mempty . get l == id ?
+--              set mempty $ get a  -- only 'id' when 'a' is 'mempty' as well.
+--              LAW WE ASSUME HOLDS: set a $ get a
+--       and is isoL . lensI == id?
+--  IDEA:
+--       Our usage of setEmpty is actually on setEmpty :: (Monoid a, Monoid b)=> (a :-> b) -> b -> a
+--       Is it the case that a well-behaved lens with Monoid a, must have Monoid b or else  perhaps be partial?
+--           set mempty $ get mempty == mempty
+--           get $ set mempty x  == x
+--               get $ set mempty (get mempty) == get mempty
+--  IDEA2: 
+--       shouldThisBeAStructure :: (Monoid a)=> Lens a b -> (b -> a, b)
+--  CONSIDER...
+--       what properties does an Iso have to have for isoL to produce a well-behaved lens?
+--          put (Iso _ g) b _ = g b
+--          get (Iso f _) a   = f a
+--
+--          get . put b  =  f (g b) -- f and g must be truly isomorphic for resulting lens to be well-behaved
+--          put . get  =  g (f a)   
+--          put b . put b  =   g b  -- doesn't matter, as put only depends on 'b'
+--  OR... 
+--       rename these below "fill" (since we're "setting" an empty)
+--  OR... 
+--       remove and just use Isos in our example.
 
 -- | Set an inner value on an initially 'mempty' value.
 --

@@ -24,8 +24,8 @@ module Data.Yall.Iso (
      composing with other @Lens@ or @Iso@.
 
      Also note that for most of these @apply i . unapply i@ is not strictly
-     @id@, e.g. @zipI@ obviously truncates lists of differing length, etc.
-     This is officially not something I'm concerned about.
+     @id@ for the entire input domain, e.g. @zipI@ obviously truncates lists of
+     differing length, etc.  
   -}
   , wordsI, showI, linesI, curryI, enumI, integerI, rationalI, zipI
   , incrementI, incrementByI, consI
