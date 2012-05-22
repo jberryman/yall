@@ -59,8 +59,6 @@ module Data.Yall.Lens (
     , lensMW
     , setW, modifyW
     , setLiftM, setLiftW, setJoin
-    -- *** Monoid setters
-    , setEmpty, setEmptyM, setEmptyW
 
     -- * Composing Lenses
     {- |
@@ -328,8 +326,8 @@ distributeL = Lens $ \(a,ebc)->
 isoL :: (Monad m, Monad w)=> Iso m w a b -> Lens m w a b
 isoL (Iso f g) = Lens $ fmap (liftM ((,) g)) f
 
--- | Convert an isomorphism between a value @a@ and a tuple of a value @b@ with
--- some \"residual\" value @r@. 
+-- | Convert to a Lens an isomorphism between a value @a@ and a tuple of a
+-- value @b@ with some \"residual\" value @r@. 
 residualL :: (Monad m, Monad w)=> Iso m w a (b,r) -> Lens m w a b
 residualL (Iso f g) = Lens $ \a-> do
     (b,r) <- f a
@@ -379,14 +377,6 @@ type (:~>) = LensM Maybe
 --              set mempty $ get a  -- only 'id' when 'a' is 'mempty' as well.
 --              LAW WE ASSUME HOLDS: set a $ get a
 --       and is isoL . lensI == id?
---  IDEA:
---       Our usage of setEmpty is actually on setEmpty :: (Monoid a, Monoid b)=> (a :-> b) -> b -> a
---       Is it the case that a well-behaved lens with Monoid a, must have Monoid b or else  perhaps be partial?
---           set mempty $ get mempty == mempty
---           get $ set mempty x  == x
---               get $ set mempty (get mempty) == get mempty
---  IDEA2: 
---       shouldThisBeAStructure :: (Monoid a)=> Lens a b -> (b -> a, b)
 --  CONSIDER...
 --       what properties does an Iso have to have for isoL to produce a well-behaved lens?
 --          put (Iso _ g) b _ = g b
@@ -400,21 +390,6 @@ type (:~>) = LensM Maybe
 --  OR... 
 --       remove and just use Isos in our example.
 
--- | Set an inner value on an initially 'mempty' value.
---
--- > setZero l b = set l b mzero
-setEmpty :: Monoid a => (a :-> b) -> b -> a
-setEmpty l b = set l b mempty
-
--- | > setZeroM l b = setM l b mzero
-setEmptyM :: (Monoid a, Monad m) => LensM m a b -> b -> m a
-setEmptyM l b = setM l b mempty
-
--- | > setEmptyW l b = setW l b mempty
-setEmptyW :: (Monoid a, Monad w) => Lens w Identity a b -> b -> w a
-setEmptyW l b = setW l b mempty
-
---TODO: more set variations? getEmpty?
 
 
 -- OPERATORS: ------------------------

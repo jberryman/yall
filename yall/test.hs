@@ -6,6 +6,8 @@ import Prelude hiding ((.),id)
 import Control.Category
 import Control.Categorical.Bifunctor
 
+import Control.Monad.Identity(Identity)
+
 
 -- -------------------------------------------
 -- PARTIAL LENSES
@@ -56,37 +58,39 @@ demo1 = setM (sndL . nth) 0 [('a',1),('b',2),('c',3)]
 -- -------------------------------------------
 -- LENSES WITH MONADIC SETTER
 
--- TODO: THIS COULD BE AN ISO. ALSO CONSIDER BIND FUNCTIONS TO INJECT FUNCS :: s -> m (), SIMPLY ADD EFFECTS
--- persist modifications to a type to a given file. An effect-ful identity lens.
-persistL :: (Monad m) => FilePath -> Lens IO m String String
-persistL nm = Lens $ \s-> return (\s'-> writeFile nm s' >> return s', s)
+-- TODO: CONSIDER BIND FUNCTIONS TO INJECT EFFECTS WITH FUNCTIONS LIKE :: s -> m ()
+--          effectId :: (a -> m ()) -> Iso w m a a -- id with effects
+--
+-- persist modifications to a type to a given file. An effect-ful identity Iso.
+persistI :: (Monad m)=> FilePath -> Iso IO m String String
+persistI nm = Iso return $ \s-> (writeFile nm s >> return s )
 
 -- we'll use this one:
 tmpFile = "/tmp/yall-test"
 printFileContents = putStrLn . ("file contents: " ++) =<< readFile tmpFile
 
--- TODO: THIS OF COURSE COULD ALSO BE AN ISO
--- build a lens with some pre-defined Iso's that offers a [Int] view on a
+-- build a new Iso with some pre-defined Iso's that offers a [Int] view on a
 -- string that looks like, e.g. "1 2 3 4 5":
-unserializedL :: (Monad w, Monad m) => Lens w m String [Int]
-unserializedL = isoL $ ifmap (inverseI showI) . wordsI
+unserializedI :: (Monad w, Monad m) => Iso w m String [Int]
+unserializedI = ifmap (inverseI showI) . wordsI
 
--- now add "persistence" effects to the above lens so everytime we do a "set"
+-- now add "persistence" effects to the above Iso so everytime we do a "set"
 -- we update the file "yall-test" to reflect the new type.
-unserializedLP :: (Monad m) => Lens IO m String [Int]
-unserializedLP = unserializedL . persistL tmpFile
+unserializedIP :: Iso IO Identity String [Int]
+unserializedIP = unserializedI . persistI tmpFile
 
 demo2 :: IO ()
 demo2 = do
-    -- TODO: IF WE BUILT AN ISO ABOVE, WE COULD USE unapply HERE:
-    -- apply the lens setter to `mempty` for some Monoid ([Char] in this case)
-    str <- setEmptyW unserializedLP [1..5]
+    -- return string representation of [1..5], writing it to disk
+    str <- unapply unserializedIP [1..5]
 
     -- LOGGING: the string we got above (by setting [Int]) was written to a file:
     print str
     printFileContents
 
-    str' <- modifyW unserializedLP (map (*2) . (6 :) . reverse) str
+    -- convert Iso to a lens, so we can use 'modify' on the [Int] representation,
+    -- once again persisting the modified string to disk:
+    str' <- modifyW (isoL unserializedIP) (map (*2) . (6 :) . reverse) str
 
     -- LOGGING: now the file was modified to reflect the changed value:
     print str'
@@ -107,4 +111,6 @@ demo2 = do
  -         modifyM f = setM . f . getM
  -     - make (Lens Identity) an instance
  -     - provide newtype wrappers for other "lifting" mechanisms to support this interface
+ - * look into ambiguous type annoyance for polymorphic-in-monad code
+ - * consider re-exporting 'Identity'
  -}
