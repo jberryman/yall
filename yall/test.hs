@@ -6,7 +6,6 @@ import Prelude hiding ((.),id)
 import Control.Category
 import Control.Categorical.Bifunctor
 
-import Control.Monad.Identity(Identity)
 
 
 -- -------------------------------------------
@@ -69,38 +68,39 @@ persistI nm = Iso return $ \s-> (writeFile nm s >> return s )
 tmpFile = "/tmp/yall-test"
 printFileContents = putStrLn . ("file contents: " ++) =<< readFile tmpFile
 
--- build a new Iso with some pre-defined Iso's that offers a [Int] view on a
+-- build a new Iso from some pre-defined Iso's that offers a [Int] view on a
 -- string that looks like, e.g. "1 2 3 4 5":
 unserializedI :: (Monad w, Monad m) => Iso w m String [Int]
 unserializedI = ifmap (inverseI showI) . wordsI
 
 -- now add "persistence" effects to the above Iso so everytime we do a "set"
--- we update the file "yall-test" to reflect the new type.
-unserializedIP :: Iso IO Identity String [Int]
-unserializedIP = unserializedI . persistI tmpFile
+-- we update the file "yall-test" to reflect the new type. Convert to a lens:
+unserializedLP :: (Monad m)=> Lens IO m String [Int]
+unserializedLP = isoL (unserializedI . persistI tmpFile)
 
 demo2 :: IO ()
 demo2 = do
-    -- return string representation of [1..5], writing it to disk
-    str <- unapply unserializedIP [1..5]
+    -- "initialize" the string representation of [1..5] 
+    let str0 = unserializedI -$ [1..5]
+
+    -- prepend zero, serializing the modification to disk:
+    str1 <- modifyW unserializedLP (0:) str0
 
     -- LOGGING: the string we got above (by setting [Int]) was written to a file:
-    print str
+    print str1
     printFileContents
 
     -- convert Iso to a lens, so we can use 'modify' on the [Int] representation,
     -- once again persisting the modified string to disk:
-    str' <- modifyW (isoL unserializedIP) (map (*2) . (6 :) . reverse) str
+    str2 <- modifyW unserializedLP (map (*2) . (6 :) . reverse) str1
 
     -- LOGGING: now the file was modified to reflect the changed value:
-    print str'
+    print str2
     printFileContents
 
 {-
  - TODO SUMMARY:
  -
- - * remove the setEmpty stuff and build using all Iso's above
- -     - see also Lens.hs
  - * re-arrange order of types for set and use let-floating, so that we are
  -   most efficient when partially-applying in zipper scenario
  -     set :: (a :-> b) -> a -> b -> a
