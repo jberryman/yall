@@ -31,7 +31,7 @@ getM :: (a L.:~> b) -> a -> Maybe b
 getM = L.getM
 
 -- | try to run the setter function on an outer and new inner value
-setM :: (a L.:~> b) -> b -> a -> Maybe a
+setM :: (a L.:~> b) -> a -> b -> Maybe a
 setM = L.setM 
 
 -- | try to modify the inner type of a value
