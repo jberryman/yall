@@ -138,7 +138,6 @@ import Control.Categorical.Object
 import Control.Monad
 import Control.Monad.Trans.Class
 import Data.Functor.Identity
-import Data.Monoid
 
 
 {-
@@ -374,7 +373,7 @@ lens g = lensM (fmap return g) . fmap return
 --
 -- > get l = runIdentity . getM l
 get :: Lens w Identity a b -> a -> b
-get l = runIdentity . liftM snd . (runLens l)
+get l = runIdentity . liftM snd . runLens l
 
 -- | Run the getter function of a pure lens
 --
