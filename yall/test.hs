@@ -76,7 +76,7 @@ unserializedI = ifmap (inverseI showI) . wordsI
 -- now add "persistence" effects to the above Iso so everytime we do a "set"
 -- we update the file "yall-test" to reflect the new type. Convert to a lens:
 unserializedLP :: LensW IO String [Int]
-unserializedLP = WL $ isoL (unserializedI . persistI tmpFile)
+unserializedLP = LW $ isoL (unserializedI . persistI tmpFile)
 
 demo2 :: IO ()
 demo2 = do
@@ -98,19 +98,13 @@ demo2 = do
     print str2
     printFileContents
 
+
+
+
+
 {-
  - TODO SUMMARY:
  -
- - * re-arrange order of types for set and use let-floating, so that we are
- -   most efficient when partially-applying in zipper scenario
- -     set :: (a :-> b) -> a -> b -> a
- - * make monadic interface a class: 
- -     class LensM l where
- -         setM :: l m a b -> ... -> m a
- -         getM :: ... -> m b
- -         modifyM f = setM . f . getM
- -     - make (Lens Identity) an instance
- -     - provide newtype wrappers for other "lifting" mechanisms to support this interface
  - * thoroughly test class-based approach: is ambiguity a problem?
  - * do a test implementation above for State monad (high priority example)
  - * rename this module 'examples.hs'

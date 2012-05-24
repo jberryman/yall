@@ -195,30 +195,30 @@ lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
 
 -- TODO: make this parameterized by 't':
 -- | lenses in which set/get should 'lift' the inner monad @w@ to @m@
-newtype LensLift w m a b = LiftL (Lens w m a b)
+newtype LensLift w m a b = LLift (Lens w m a b)
 
 instance (MonadTrans t, Monad (t w), Monad w)=> Lenses (LensLift w) (t w) where
-    getM (LiftL l) = getterM l
-    setM (LiftL l) a = let mba = setterM l a
+    getM (LLift l) = getterM l
+    setM (LLift l) a = let mba = setterM l a
                         in \b-> lift . ($ b) =<< mba
 
 
 -- | lenses in which @m@ == @w@ and we would like to 'join' the two in get/set
-newtype LensJoin m a b = JoinL (Lens m m a b)
+newtype LensJoin m a b = LJoin (Lens m m a b)
 
 instance (Monad m)=> Lenses LensJoin m where
-    getM (JoinL l) = getterM l
-    setM (JoinL l) a = let mba = setterM l a
+    getM (LJoin l) = getterM l
+    setM (LJoin l) a = let mba = setterM l a
                         in \b-> mba >>= ($ b)
 
 -- | lenses in which only the setter @w@ is monadic
-newtype LensW w a b = WL (Lens w Identity a b)
+newtype LensW w a b = LW (Lens w Identity a b)
 
 instance (Monad w)=> Lenses LensW w where
-    getM (WL l) = return . get l
-    setM (WL (Lens f)) a = let bwa = fst $ runIdentity $ f a
+    getM (LW l) = return . get l
+    setM (LW (Lens f)) a = let bwa = fst $ runIdentity $ f a
                             in bwa
-    modifyM (WL (Lens f)) g = uncurry ($) . second g . runIdentity . f
+    modifyM (LW (Lens f)) g = uncurry ($) . second g . runIdentity . f
 
 
 -- -- | set, 'lift'ing the outer (getter\'s) Monadic environment to the type of
