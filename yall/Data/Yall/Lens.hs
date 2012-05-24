@@ -193,7 +193,6 @@ lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
 ------------------ MONADIC VARIANTS: ---------------------
 -- TODO: derive all classes
 
--- TODO: make this parameterized by 't':
 -- | lenses in which set/get should 'lift' the inner monad @w@ to @m@
 newtype LensLift w m a b = LLift (Lens w m a b)
 

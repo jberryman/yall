@@ -42,8 +42,8 @@ demo0 = getM (testString . testRec . testRec) (C2 "top" (C1 "lens will fail" Tru
 -- LENSES WITH MORE ABSTRACT MONADIC GETTER 
 
 
--- Here we have a lens with a getter in the list monad, defining a mutable view
--- on the Nth element of the list:
+-- Here we have a lens with a getter in the list monad, defining an abstract,
+-- mutable view on the "Nth" element of the list:
 nth :: LensM [] [a] a
 nth = Lens $ foldr nthGS []
     where nthGS n l = (return . (: map snd l), n) : map (prepend n) l
@@ -105,9 +105,6 @@ demo2 = do
 {-
  - TODO SUMMARY:
  -
- - * thoroughly test class-based approach: is ambiguity a problem?
- - * do a test implementation above for State monad (high priority example)
- - * rename this module 'examples.hs'
  - * consider if Iso should be parameterized by a single Monad, i.e. what utility do we
  -    have with apply/unapply that can't be sequenced with >=> ? 
  -    And what about the invariant from partial-isomorphisms:
@@ -115,6 +112,5 @@ demo2 = do
  -    research isomorphisms/bijections again. clarify what you mean.
  - * similarly, if we decide to insist on setM/getM returning result in 'm':
  -      what can we assert about lenses now that both are parameterixzed by same monad?
- - * look into ambiguous type annoyance for polymorphic-in-monad code
  -
  -}
