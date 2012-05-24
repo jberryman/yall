@@ -51,7 +51,7 @@ nth = Lens $ foldr nthGS []
 
 -- This composes nicely. Set the Nth element of our list to 0:
 demo1 :: [ [(Char,Int)] ]
-demo1 = setM (sndL . nth) 0 [('a',1),('b',2),('c',3)]
+demo1 = setM (sndL . nth) [('a',1),('b',2),('c',3)] 0
 
 
 -- -------------------------------------------
@@ -75,8 +75,8 @@ unserializedI = ifmap (inverseI showI) . wordsI
 
 -- now add "persistence" effects to the above Iso so everytime we do a "set"
 -- we update the file "yall-test" to reflect the new type. Convert to a lens:
-unserializedLP :: (Monad m)=> Lens IO m String [Int]
-unserializedLP = isoL (unserializedI . persistI tmpFile)
+unserializedLP :: LensW IO String [Int]
+unserializedLP = WL $ isoL (unserializedI . persistI tmpFile)
 
 demo2 :: IO ()
 demo2 = do
@@ -84,7 +84,7 @@ demo2 = do
     let str0 = unserializedI -$ [1..5]
 
     -- prepend zero, serializing the modification to disk:
-    str1 <- modifyW unserializedLP (0:) str0
+    str1 <- modifyM unserializedLP (0:) str0
 
     -- LOGGING: the string we got above (by setting [Int]) was written to a file:
     print str1
@@ -92,7 +92,7 @@ demo2 = do
 
     -- convert Iso to a lens, so we can use 'modify' on the [Int] representation,
     -- once again persisting the modified string to disk:
-    str2 <- modifyW unserializedLP (map (*2) . (6 :) . reverse) str1
+    str2 <- modifyM unserializedLP (map (*2) . (6 :) . reverse) str1
 
     -- LOGGING: now the file was modified to reflect the changed value:
     print str2
@@ -111,6 +111,16 @@ demo2 = do
  -         modifyM f = setM . f . getM
  -     - make (Lens Identity) an instance
  -     - provide newtype wrappers for other "lifting" mechanisms to support this interface
+ - * thoroughly test class-based approach: is ambiguity a problem?
+ - * do a test implementation above for State monad (high priority example)
+ - * rename this module 'examples.hs'
+ - * consider if Iso should be parameterized by a single Monad, i.e. what utility do we
+ -    have with apply/unapply that can't be sequenced with >=> ? 
+ -    And what about the invariant from partial-isomorphisms:
+ -        apply i x == Just y   iff   unapply i y == Just x
+ -    research isomorphisms/bijections again. clarify what you mean.
+ - * similarly, if we decide to insist on setM/getM returning result in 'm':
+ -      what can we assert about lenses now that both are parameterixzed by same monad?
  - * look into ambiguous type annoyance for polymorphic-in-monad code
- - * consider re-exporting 'Identity'
+ -
  -}

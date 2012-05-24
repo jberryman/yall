@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies , FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeOperators, TypeFamilies , FlexibleInstances, FlexibleContexts #-}
 module Data.Yall.Lens (
     {- | 
      The Lenses here are parameterized over two Monads (by convention @m@ and
@@ -46,19 +46,21 @@ module Data.Yall.Lens (
 -- [[('a',0),('b',2),('c',3)],[('a',1),('b',0),('c',3)],[('a',1),('b',2),('c',0)]]
 
 
-    -- ** Lenses with monadic getters
+    , Lenses(..)
+
     , LensM
     , lensM
-    , getM, setM, modifyM 
     -- ** Monadic variants
     {- | The setter continuation is embedded in the getter\'s Monadic
        environment, so we offer several ways of combining different types of
-       getter environments(@m@) and setter environments (@w@), for Lenses
+       getter environments (@m@) and setter environments (@w@), for Lenses
        with complex effects.
+
+       Newtype wrappers around 'Lens' let us use the same 'Lenses' interface
+       for getting and setting for these various monad-combining schemes.
     -}
     , lensMW
-    , setW, modifyW
-    , setLiftM, setLiftW, setJoin
+    , LensLift(..) , LensJoin(..) , LensW(..)
 
     -- * Composing Lenses
     {- |
@@ -147,34 +149,39 @@ import Data.Monoid
 -- constrain these 'm's to Monad?
 newtype Lens w m a b = Lens { runLens :: a -> m (b -> w a, b) }
 
--- | A lens in which the setter returns its result in the trivial identity 
--- monad. This is appropriate e.g. for traditional partial lenses, where there is
--- a potential that the lens could fail only on the /outer/ constructor.
+-- | A lens in which the setter returns its result in the trivial 'Identity'
+-- monad. This is appropriate e.g. for traditional partial lenses on sum types,
+-- where there is a potential that the lens could fail only on the /outer/
+-- constructor.
 type LensM = Lens Identity
 
 -- | Create a monadic lens from a getter and setter
 lensM :: (Monad m)=> (a -> m b) -> (a -> m (b -> a)) -> LensM m a b
 lensM g = lensMW g . fmap (liftM $ fmap return)
 
--- | get, returning the result in a Monadic environment. This is appropriate
--- e.g. for traditional partial lenses on multi-constructor types. See also
--- 'setM'
-getM :: (Monad m)=> Lens w m a b -> a -> m b
-getM (Lens f) = liftM snd . f
+-- | A class for our basic (monadic) lens operations. Minimal complete
+-- definition is 'getM' and 'setM'
+class (Monad m)=> Lenses l m where
+    getM :: l m a b -> a -> m b
+    setM :: l m a b -> a -> b -> m a
+    modifyM :: l m a b -> (b -> b) -> a -> m a
+    modifyM l f a = getM l a >>= setM l a . f
 
--- | set, returning the result in the getter\'s Monadic environment, running 
--- the setter\'s trivial Identity monad. 
-setM :: (Monad m)=> LensM m a b -> b -> a -> m a
-setM (Lens f) b = liftM (runIdentity . ($ b) . fst) . f
+-- helpers:
+getterM :: Monad m => Lens t m a r -> a -> m r
+getterM (Lens f) = liftM snd . f
+setterM :: Monad m => Lens t m a b -> a -> m (b -> t a)
+setterM (Lens f) = liftM fst . f
 
--- | modify the inner value within the getter\'s Monadic environment 
-modifyM :: (Monad m)=> LensM m a b -> (b -> b) -> a -> m a
-modifyM (Lens f) g a = do
-    (bWa, b) <- f a
-    return (runIdentity $ bWa $ g b)
+instance (Monad m)=> Lenses (Lens Identity) m where
+    getM = getterM
+    -- is let-floating effective here? Can snd be GCed after 'setM l a'?
+    setM l a = let mba = setterM l a
+                in \b-> liftM (runIdentity . ($ b)) mba
+    modifyM (Lens f) g a = do
+        (bWa, b) <- f a
+        return (runIdentity $ bWa $ g b)
 
-modifyW :: (Monad w)=> Lens w Identity a b -> (b -> b) -> a -> w a
-modifyW (Lens f) g = uncurry ($) . second g . runIdentity . f
 
 -- | Create a monadic Lens from a setter and getter.
 --
@@ -182,26 +189,45 @@ modifyW (Lens f) g = uncurry ($) . second g . runIdentity . f
 lensMW :: (Monad m)=> (a -> m b) -> (a -> m (b -> w a)) -> Lens w m a b
 lensMW g s = Lens $ \a-> liftM2 (,) (s a) (g a)
 
--- | set, with Monadic setter & pure getter
-setW :: (Monad w)=> Lens w Identity a b -> b -> a -> w a
-setW (Lens f) b = ($ b) . fst . runIdentity . f 
 
--- | set, 'lift'ing the outer (getter\'s) Monadic environment to the type of
--- the setter monad transformer.
-setLiftM :: (Monad (t m), MonadTrans t, Monad m)=> Lens (t m) m a b -> b -> a -> t m a  
-setLiftM (Lens f) b = join . liftM (($ b) . fst) . lift . f 
+------------------ MONADIC VARIANTS: ---------------------
+-- TODO: derive all classes
 
--- | set, like 'setLiftM' but we 'lift' the /inner/ setter\'s environment to
--- the outer getter monad transformer.
-setLiftW :: (MonadTrans t, Monad (t w), Monad w)=> Lens w (t w) a b -> b -> a -> t w a
-setLiftW (Lens f) b a = lift . ($ b) . fst =<< f a 
+-- TODO: make this parameterized by 't':
+-- | lenses in which set/get should 'lift' the inner monad @w@ to @m@
+newtype LensLift w m a b = LiftL (Lens w m a b)
+
+instance (MonadTrans t, Monad (t w), Monad w)=> Lenses (LensLift w) (t w) where
+    getM (LiftL l) = getterM l
+    setM (LiftL l) a = let mba = setterM l a
+                        in \b-> lift . ($ b) =<< mba
+
+
+-- | lenses in which @m@ == @w@ and we would like to 'join' the two in get/set
+newtype LensJoin m a b = JoinL (Lens m m a b)
+
+instance (Monad m)=> Lenses LensJoin m where
+    getM (JoinL l) = getterM l
+    setM (JoinL l) a = let mba = setterM l a
+                        in \b-> mba >>= ($ b)
+
+-- | lenses in which only the setter @w@ is monadic
+newtype LensW w a b = WL (Lens w Identity a b)
+
+instance (Monad w)=> Lenses LensW w where
+    getM (WL l) = return . get l
+    setM (WL (Lens f)) a = let bwa = fst $ runIdentity $ f a
+                            in bwa
+    modifyM (WL (Lens f)) g = uncurry ($) . second g . runIdentity . f
+
+
+-- -- | set, 'lift'ing the outer (getter\'s) Monadic environment to the type of
+-- -- the setter monad transformer.
+-- setLiftM :: (Monad (t m), MonadTrans t, Monad m)=> Lens (t m) m a b -> b -> a -> t m a  
+-- setLiftM (Lens f) b = join . liftM (($ b) . fst) . lift . f 
 
     
 
--- | set, combining the effects of the identical setter and getter Monads with
--- 'join'.
-setJoin :: (Monad m)=> Lens m m a b -> b -> a -> m a
-setJoin (Lens f) b a = f a >>= ($ b) . fst
 
 instance (Monad w, Monad m)=> Category (Lens w m) where
     id = Lens $ return . (,) return
@@ -349,16 +375,16 @@ lens g = lensM (fmap return g) . fmap return
 --
 -- > get l = runIdentity . getM l
 get :: Lens w Identity a b -> a -> b
-get l = runIdentity . getM l
+get l = runIdentity . liftM snd . (runLens l)
 
 -- | Run the getter function of a pure lens
 --
--- > set l b = runIdentity . setM l b
-set :: (a :-> b) -> b -> a -> a
-set l b = runIdentity . setM l b
+-- > set l b = runIdentity . setM l a
+set :: (a :-> b) -> a -> b -> a
+set l a = runIdentity . setM l a
 
 modify :: (a :-> b) -> (b -> b) -> a -> a
-modify l b = runIdentity . modifyM l b
+modify l f = runIdentity . modifyM l f
 
 -- | a lens that can fail in the Maybe monad on the outer type. Suitable for a
 -- normal lens on a multi-constructor type. The more general 'setM', 'getM', etc.
@@ -399,5 +425,5 @@ type (:~>) = LensM Maybe
 (^$) = get
 
 -- | > ma ^>>= l = ma >>= getM l
-(^>>=) :: (Monad m)=> m a -> Lens w m a b -> m b
+(^>>=) :: (Lenses l m)=> m a -> l m a b -> m b
 ma ^>>= l = ma >>= getM l
