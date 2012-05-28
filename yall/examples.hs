@@ -105,6 +105,9 @@ demo2 = do
 {-
  - TODO SUMMARY:
  -
+ - * more compelling monadic examples:
+ -     think about where do notation shines.
+ -        - lenses as parser combinator "editors"? Regex lenses?
  - * consider if Iso should be parameterized by a single Monad, i.e. what utility do we
  -    have with apply/unapply that can't be sequenced with >=> ? 
  -    And what about the invariant from partial-isomorphisms:

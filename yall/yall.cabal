@@ -1,6 +1,6 @@
 Name:                yall
 
-Version:             0.2
+Version:             0.2.0.1
 
 Synopsis:            Lenses with a southern twang
 
@@ -34,11 +34,16 @@ Description:         Why yet /another/ lens library?
                      .
                      - a module providing template haskell deriving of Lenses
                      .
+                     - pre-define lenses for prelude types, State
+                     .
                      /CHANGES/:
                      .
                      - remove 'setEmpty' variants only useful on lenses better expressed in Iso
+                     .
                      - create a class for lens operations, supporting...
+                     .
                      - use newtype wrappers for different monadic lifting schemes
+                     .
                      - better ordering for set, allowing let-floating for partial application
 
 
