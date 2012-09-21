@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators , MultiParamTypeClasses , FlexibleInstances, FlexibleContexts, GeneralizedNewtypeDeriving , TypeFamilies #-}
+{-# LANGUAGE DefaultSignatures, TypeOperators , MultiParamTypeClasses , FlexibleInstances, FlexibleContexts, GeneralizedNewtypeDeriving , TypeFamilies #-}
 module Data.Yall.Iso (
  {- |
   Iso is similar but more flexible than Lens in that they have no dependency on
@@ -94,11 +94,9 @@ instance Bifunctor Either IsoPure IsoPure IsoPure where
 
 instance Associative IsoPure (,) where
     associate = IsoPure associate
+    disassociate = IsoPure disassociate
 instance Associative IsoPure Either where
     associate = IsoPure associate
-instance Disassociative IsoPure (,) where
-    disassociate = IsoPure disassociate
-instance Disassociative IsoPure Either where
     disassociate = IsoPure disassociate
 
 instance Braided IsoPure (,) where
@@ -108,11 +106,10 @@ instance Braided IsoPure Either where
 instance Symmetric IsoPure Either where
 instance Symmetric IsoPure (,) where
 
-type instance Id IsoPure (,) = ()
 instance Monoidal IsoPure (,) where
+    type Id IsoPure (,) = ()
     idl = IsoPure idl
     idr = IsoPure idr
-instance Comonoidal IsoPure (,) where
     coidl = IsoPure coidl
     coidr = IsoPure coidr
 
@@ -140,11 +137,10 @@ instance (Monad m)=> C.Functor m (Iso m m) (Iso Identity Identity) where
 
 
 -- Control.Categorical.Bifunctor
-instance (Monad m, Monad w)=> PFunctor (,) (Iso w m) (Iso w m) where
-    first = firstDefault
+instance (Monad m, Monad w)=> PFunctor (,) (Iso w m) (Iso w m)  where
+    first f = bimap f id
 instance (Monad m, Monad w)=> QFunctor (,) (Iso w m) (Iso w m) where
-    second = secondDefault
-
+    second = bimap id
 instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
     bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM' g g')
         -- WHY DOES TypeFamilies CAUSE PROBLEMS WITH THIS?:
@@ -152,10 +148,9 @@ instance (Monad m, Monad w)=> Bifunctor (,) (Iso w m) (Iso w m) (Iso w m) where
               bimapM' x = fmap extractJoinT . bimap x
 
 instance (Monad m, Monad w)=> PFunctor Either (Iso w m) (Iso w m) where
-    first = firstDefault
+    first f = bimap f id
 instance (Monad m, Monad w)=> QFunctor Either (Iso w m) (Iso w m) where
-    second = secondDefault
-
+    second = bimap id
 instance (Monad m, Monad w)=> Bifunctor Either (Iso w m) (Iso w m) (Iso w m) where
     bimap (Iso f g) (Iso f' g') = Iso (bimapM f f') (bimapM' g g')
         where bimapM x = fmap extractJoinE . bimap x
@@ -174,15 +169,12 @@ extractJoinT = uncurry $ liftM2 (,)
 -- Control.Category.Associative
 instance (Monad m, Monad w)=> Associative (Iso w m) (,) where
     associate = iso associate disassociate
+    disassociate = iso disassociate associate
 
 instance (Monad m, Monad w)=> Associative (Iso w m) Either where
     associate = iso associate disassociate
+    disassociate = iso disassociate associate
     
-instance (Monad m, Monad w)=> Disassociative (Iso w m) (,) where
-    disassociate = iso disassociate associate
-
-instance (Monad m, Monad w)=> Disassociative (Iso w m) Either where
-    disassociate = iso disassociate associate
 
 -- Control.Category.Braided
 instance (Monad m, Monad w)=> Braided (Iso w m) (,) where
@@ -201,13 +193,10 @@ factorI :: (Monad m, Monad w)=> Iso w m (Either (a,b) (a,c)) (a, Either b c)
 factorI = iso factor distribute
 
 -- Control.Category.Monoidal
-type instance Id (Iso w m) (,) = ()
-
 instance (Monad m, Monad w)=> Monoidal (Iso w m) (,) where
+    type Id (Iso w m) (,) = ()
     idl = iso idl coidl 
     idr = iso idr coidr
-
-instance (Monad m, Monad w)=> Comonoidal (Iso w m) (,) where
     coidl =  iso coidl idl 
     coidr = iso coidr idr 
 

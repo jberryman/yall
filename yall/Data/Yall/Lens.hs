@@ -111,11 +111,11 @@ module Data.Yall.Lens (
     , (^$), (^>>=)
     ) where
 
--- TODO
---     - for GHC 7.2, EK has switched to using DefaultSignatures in e.g. Bifunctor. See:
---          https://github.com/ekmett/categories/commit/81857ce79d6c24be08d827f115109f1c6b8971ea
---       at some point we'll want to upgrade this, and make the appropriate changes
+-- TODO (PROBS NOT GOING TO HAPPEN)
 --     - look at some of the looping combinators we use in pez and include here, e.g. untilL :: (a -> Bool) -> Lens a a -> Lens a a
+--     - automatic lens deriving TH (included in module)
+--     - generate von laarhoven lenses (compatible with 'lens')
+--     - predefined lenses for Prelude types and State
 
 
 import Data.Yall.Iso
@@ -140,10 +140,6 @@ import Control.Monad.Trans.Class
 import Data.Functor.Identity
 
 
-{-
-  TODO initial release
-       template haskell library
--}
 
 -- constrain these 'm's to Monad?
 newtype Lens w m a b = Lens { runLens :: a -> m (b -> w a, b) }
@@ -238,10 +234,10 @@ instance (Monad w, Monad m)=> Category (Lens w m) where
 -- BIFUNCTOR: --
 instance (Monad w, Monad m)=> PFunctor (,) (Lens w m) (Lens w m) where
   --first :: Lens a b -> Lens (a,x) (b,x)
-    first = firstDefault
+    first f = bimap f id
 
 instance (Monad w, Monad m)=> QFunctor (,) (Lens w m) (Lens w m) where
-    second = secondDefault
+    second = bimap id
 
 instance (Monad w, Monad m)=> Bifunctor (,) (Lens w m) (Lens w m) (Lens w m) where
     bimap (Lens f) (Lens g) = 
@@ -276,8 +272,6 @@ instance (Monad w, Monad m)=> HasTerminalObject (Lens w m) where
 instance (Monad w, Monad m)=> Associative (Lens w m) (,) where
   --associate :: Lens ((a,b),c) (a,(b,c))
     associate = Lens $ \((a,b),c)-> return (\(a',(b',c'))-> return ((a',b'),c'), (a,(b,c)))
-
-instance (Monad w, Monad m)=> Disassociative (Lens w m) (,) where
   --disassociate :: Lens (a,(b,c)) ((a,b),c)
     disassociate =Lens $ \(a,(b,c))-> return (\((a',b'),c') -> return (a',(b',c')), ((a,b),c))
 
@@ -289,15 +283,13 @@ instance (Monad w, Monad m)=> Symmetric (Lens w m) (,)
 
 -- (CO)MONOIDAL ----------------------------------------
 
-type instance Id (Lens w m) (,) = ()
 
 -- THIS ABSTRACTS THE dropl/r FUNCTIONS FROM GArrow:
 instance (Monad w, Monad m)=> Monoidal (Lens w m) (,) where  
+    type Id (Lens w m) (,) = ()
   --idl :: Lens ((), a)  a
     idl = Lens $ \((),a)-> return (\a'-> return ((),a'), a)
     idr = Lens $ \(a,())-> return (\a'-> return (a',()), a)
-
-instance (Monad w, Monad m)=> Comonoidal (Lens w m) (,) where
   --coidl :: Lens a ((),a)
     coidl = Lens $ \a-> return (\((),a')-> return a', ((),a))
     coidr = Lens $ \a-> return (\(a',())-> return a', (a,()))

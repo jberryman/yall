@@ -1,6 +1,6 @@
 Name:                yall
 
-Version:             0.2.0.1
+Version:             0.2.1
 
 Synopsis:            Lenses with a southern twang
 
@@ -30,6 +30,9 @@ Description:         Why yet /another/ lens library?
                      and optionally "Data.Yall.Iso". "Data.Yall" is a simplified,
                      but mostly-compatible, version of a subset of "Data.Yall.Lens".
                      .
+                     /UPDATE/: I have stopped developing this package. Instead you
+                     should take a look at and contribute to <http://hackage.haskell.org/package/lens>
+                     .
                      /TODOs/:
                      .
                      - a module providing template haskell deriving of Lenses
@@ -38,13 +41,7 @@ Description:         Why yet /another/ lens library?
                      .
                      /CHANGES/:
                      .
-                     - remove 'setEmpty' variants only useful on lenses better expressed in Iso
-                     .
-                     - create a class for lens operations, supporting...
-                     .
-                     - use newtype wrappers for different monadic lifting schemes
-                     .
-                     - better ordering for set, allowing let-floating for partial application
+                     - depend on categories >= 1
 
 
 Homepage:            http://brandon.si/code/yall/
@@ -71,6 +68,6 @@ source-repository head
 Library
   Exposed-modules:     Data.Yall, Data.Yall.Lens, Data.Yall.Iso
   
-  Build-depends:       categories < 1.0
+  Build-depends:       categories >= 1.0
                      , transformers
                      , base < 5 && >= 4
